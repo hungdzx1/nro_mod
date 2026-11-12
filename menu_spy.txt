@@ -1,0 +1,6 @@
+﻿[05:07:05] === MENU: Goku Sự Kiện [ID: 92] ===
+[05:07:05]  [0] Cửa hàng Sự Kiện
+[05:07:05]  [1] UP SK NOEL
+[05:07:05]  [2] UP SK TẾT 2024
+[05:07:05]  [3] Đổi Hộp Quà Medusa
+[05:07:06] -> Gửi confirmMenu(NPC: 92, Lựa chọn: 0)

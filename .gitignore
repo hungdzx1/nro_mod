@@ -1,0 +1,33 @@
+# Build artifacts
+bin/
+obj/
+*.dll
+*.exe
+*.pdb
+
+# Unity game binaries & data
+MonoBleedingEdge/
+ProjCompleted_Data/
+UnityPlayer.dll
+ProjCompleted.exe
+UnityCrashHandler64.exe
+
+# Archives & backups
+*.rar
+*.zip
+*.7z
+Backup/
+
+# Sensitive files
+.env*
+*credentials*
+*.key
+*.pem
+
+# IDE / OS
+.vs/
+.vscode/
+*.user
+*.suo
+Thumbs.db
+.DS_Store
