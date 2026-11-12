@@ -2435,6 +2435,7 @@ public class Controller : IMessageHandler
 						Char.myCharz().arrItemBag[b25] = null;
 					}
 				}
+				Game2.Mod.AutoGop.gI().OnBagUpdated();
 				break;
 			}
 			case -35:
@@ -3170,6 +3171,7 @@ public class Controller : IMessageHandler
 							array18[num179] = msg.reader().readUTF();
 						}
 						Game2.Mod.AutoGop.gI().ParseDiemPoints(text8, num177, array18);
+						Game2.Mod.AutoGop.gI().OnReceiveMenuChat(num177, text8);
 						GameScr.gI().createMenu(array18, npc4);
 						if ((!Game2.Mod.NpcMenuHelper.gI().isAutoRunning || Game2.Mod.NpcMenuHelper.gI().autoNpcId != num177 || !Game2.Mod.NpcMenuHelper.gI().hideUi) && (!Game2.Mod.AutoGop.gI().ShouldSuppressGameUi()))
 						{
@@ -3197,6 +3199,7 @@ public class Controller : IMessageHandler
 				{
 				}
 				Game2.Mod.AutoGop.gI().ParseDiemPoints(chat2, num177, array19);
+				Game2.Mod.AutoGop.gI().OnReceiveMenuChat(num177, chat2);
 				GameScr.gI().createMenu(array19, npc5);
 				if ((!Game2.Mod.NpcMenuHelper.gI().isAutoRunning || Game2.Mod.NpcMenuHelper.gI().autoNpcId != num177 || !Game2.Mod.NpcMenuHelper.gI().hideUi) && (!Game2.Mod.AutoGop.gI().ShouldSuppressGameUi()))
 				{
@@ -5560,6 +5563,7 @@ public class Controller : IMessageHandler
 						GameScr.hpPotion += Char.myCharz().arrItemBag[l].quantity;
 					}
 				}
+				Game2.Mod.AutoGop.gI().OnBagUpdated();
 				Char.myCharz().arrItemBox = new Item[msg.reader().readByte()];
 				GameCanvas.panel.hasUse = 0;
 				for (int n = 0; n < Char.myCharz().arrItemBox.Length; n++)

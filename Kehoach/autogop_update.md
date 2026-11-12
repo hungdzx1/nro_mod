@@ -1,303 +1,143 @@
-# ĐẶC TẢ TÍNH NĂNG TOÀN DIỆN: "AUTO GỘP" (WORKFLOW AUTOMATION)
+# AUTO GỘP — ĐẶC TẢ UPDATE V2 (13/11/2026)
 
-Tài liệu này phản ánh chính xác cấu trúc, logic vận hành, thông số cài đặt, giao diện, phím tắt và các cơ chế bảo vệ chống treo/đơ máy của hệ thống **Auto Gộp** hiện hành trong mã nguồn game.
+> Tài liệu thay thế đề xuất cho `Kehoach/autogop_update.md` trong repo `hungdzx1/nro_mod`.
+> Quy ước: `### SỬA/ UPDATE ###` đánh dấu yêu cầu mới so với phiên bản hiện có.
+> **Phạm vi:** giữ toàn bộ tính năng không được đề cập; cập nhật cấu hình Bánh, HN, Điểm; sửa riêng Auto đổi Tiên Phù Zeno; **KHÔNG XMAP: bỏ hoàn toàn XMap TỰ ĐỘNG đối với Zeno**.
+> Bản `Backup_Snapshot_20261112_144724.zip` là mã tham khảo, **không** được ghi đè thẳng lên bản hiện tại. `PC_V2.rar` là game gốc chưa mod, chỉ dùng đối chiếu giao thức/hàm, **không** được dùng ghi đè DLL đã mod.
 
+## I. Cấu trúc và điều khiển chung
 
-UPDATE: SẼ CÓ COMMENT NHƯ SAU: ### SỬA/ UPDATE ###
----
+- Tab `0: Chung`; `1: Bánh` (NPC 92); `2: HN` (NPC 56); `3: Điểm` (NPC 66); `4: Zeno` (NPC 18).
+- Phím `X` mở menu mod; `F3` chạy workflow; `F4` chạy Bánh; `F5` chạy HN; `F7` chạy Điểm; `F8` chạy Zeno; `F6` hoặc `A` dừng khẩn cấp. Giữ các lệnh chat đang hoạt động (`gop`, `autogop`, `f3`, `chaygop`, `f6`, `dunggop`).
+- Giữ checkbox bật từng tab, thứ tự ưu tiên, delay chuyển tab, giới hạn vòng và routing cục bộ như bản hiện tại, trừ các điều chỉnh được chỉ rõ ở dưới.
+- Thứ tự mặc định của Tab Chung: Bánh (`1`) → Điểm (`3`) → Zeno (`4`) → HN (`2`). Các tab ở **hai map khác nhau**, do đó **F3 không còn có thể tự chạy trọn chu trình từ Đảo Kame sang Karin** khi đã bỏ XMap Zeno. Khi đến Zeno mà nhân vật không ở Karin, dừng/tạm dừng workflow và thông báo chính xác, tuyệt đối không tự XMap, không tự đánh dấu thiếu vé, không lặp vô hạn qua routing.
+- Giữ thông báo nội bộ chống đệ quy; cho phép tùy chọn ẩn menu/UI/nhân vật/chữ bay nhưng việc ẩn UI **không được ngăn xử lý gói tin hoặc nuốt popup lỗi trước khi được ghi log**.
 
-## I. TỔNG QUAN HỆ THỐNG
+## II. Tab 1 — BÁNH (ID 1)
 
-Hệ thống **Auto Gộp** quản lý 5 Tab chức năng chuyên biệt:
-* **Tab 0: Chung** (`ID: 0`) – Bộ chỉ huy điều phối quy trình tổng thể.
-* **Tab 1: Bánh** (`ID: 1`) – Mua & Tự động sử dụng Bánh tại Goku (NPC 92).
-* **Tab 2: HN** (`ID: 2`) – Mua & Sử dụng Hồn Nước tại NPC 56.
-* **Tab 3: Điểm** (`ID: 3`) – Đổi Điểm Nồi Bánh tại NPC 66.
-* **Tab 4: Zeno** (`ID: 4`) – Đổi Tiên Phù Zeno tại Thần Mèo Karin (NPC 18).
+- Item ID `1337`, NPC ID `92`, map `5`, loại mua `targetBuyTypeBanh=3`.
+- Hiển thị số lượng Bánh trong túi và Hồng Ngọc như hiện tại.
+- Số lượng mua/đợt: giữ mặc định `batchQtyBanh=1000` và giới hạn hợp lệ hiện có.
+- **### SỬA/ UPDATE ###** `delayBuyBanhMs` mặc định thành **600ms** (không còn 200ms). Cấu hình UI, dữ liệu mặc định và nhãn phải thống nhất; không ghi đè giá trị người dùng đã tự đặt khi chuyển tab.
+- **### SỬA/ UPDATE ### BỎ ĐK 1 `Đủ số đợt mua`:** loại bỏ checkbox và ô `targetBatchesBanh` khỏi giao diện và luồng stop; không để tham chiếu vô hiệu trong điều kiện dừng, validation, logic routing. Nếu cần giữ field cũ để tương thích, không cho nó ảnh hưởng hành vi.
+- Giữ **ĐK 2** `Đầy túi / hết tài nguyên` (`stopBanhCond2`) và **ĐK 3** `Đạt mốc Bánh` (`stopBanhCond3`, `targetItemCountBanh`, mặc định 5000), có thể cùng được bật.
+- **### SỬA/ UPDATE ### DÙNG BÁNH CHỈ 1 LẦN:** khi đạt mốc hoặc khi ĐK2 kích hoạt trong khi còn Bánh và ĐK3 bật, thực hiện **chính xác một lần** gọi `UseItemInBag(1337)` cho lần kích hoạt đó; **bỏ vòng gọi lặp mỗi `delayUseBanhMs=200`**. Chờ trạng thái hành trang/server cập nhật rồi xác minh. Nếu server thực tế tiêu hết cả stack bằng một lần dùng, xác nhận sạch túi rồi hoàn tất; nếu vẫn còn Bánh, **không tự spam lần tiếp theo**, hiển thị rõ lượng còn lại và dừng/chuyển tab theo chính sách hoàn tất đã cài. Không tuyên bố 'đã dùng sạch' khi túi vẫn còn Bánh.
+- Giữ định tuyến sau khi Bánh hoàn tất (`enableRoutingBanh`, đích mặc định Điểm ID 3). Tránh đệ quy StartTab trực tiếp khi nhiều điều kiện cùng kích hoạt.
 
----
+## III. Tab 2 — HN (ID 2)
 
-## II. BẢNG QUẢN LÝ PHÍM TẮT & LỆNH ĐIỀU KHIỂN
+- **### SỬA/ UPDATE ### TÊN/Ý NGHĨA:** đổi nhãn thành **BOX HỒNG NGỌC SSS (HN)**, item `1581`. Không gọi là Hồn Nước. NPC `56`, map `5`, `targetBuyTypeHn=3`.
+- Nguyên liệu mua: Zeno item ID `1378`, giá `40.000` Zeno/1 HN. Hiển thị số HN trong hành trang và số Zeno có thể sử dụng.
+- `batchQtyHn` mặc định 1000; `targetBatchesHn` mặc định 50.
+- **### SỬA/ UPDATE ###** `delayBuyHnMs` mặc định **600ms** (thay 200ms).
+- **### SỬA/ UPDATE ### BỎ TỰ ĐỘNG DÙNG HN:** vô hiệu hóa/loại bỏ field `autoUseHn`, xóa checkbox `[v] Vừa mua vừa dùng (1581)`, không còn gọi `UseItemInBag(1581)` sau mua; vật phẩm chỉ được mua, không tự sử dụng.
+- **### SỬA/ UPDATE ### ĐIỀU KIỆN DỪNG:** bỏ ĐK2 `Đầy/Hết` khỏi lựa chọn người dùng; thay bằng lựa chọn **một trong hai chế độ** (radio):
+  - **ĐK1:** dừng khi đạt số đợt `targetBatchesHn`.
+  - **ĐK3:** dừng **trước khi gửi yêu cầu mua** nếu `GetBagItemCount(1378) < batchQtyHn × 40.000` (phép nhân kiểu `long`, ví dụ 1000 × 40.000 = 40.000.000 Zeno).
+- Dù chọn ĐK1 hoặc ĐK3, khi server báo thật sự đầy túi/thiếu nguyên liệu/hủy giao dịch vẫn phải **dừng an toàn và ghi đúng nguyên nhân**, không tiếp tục gửi gói lỗi. Đây là bảo vệ lỗi, không phải ĐK2 trên UI.
+- Giữ routing HN (`enableRoutingHn`, đích mặc định Zeno ID 4), nhưng nếu Zeno khác map, áp dụng quy tắc "không tự XMap" của Tab 4, không hình thành vòng lặp.
 
-### 1. Phím Tắt Bàn Phím (Hotkeys)
-| Phím tắt | Tác vụ thực thi |
-| :--- | :--- |
-| **Phím X** | Mở Menu Mod $\rightarrow$ Chọn **Auto Gộp** để Bật/Tắt cửa sổ điều khiển |
-| **Phím F3** | **BẮT ĐẦU** chạy toàn bộ quy trình Auto Gộp tuần tự theo thiết lập tại **Tab Chung** |
-| **Phím F4** | Khởi chạy độc lập chức năng **Tab 1: Bánh** |
-| **Phím F5** | Khởi chạy độc lập chức năng **Tab 2: HN** |
-| **Phím F7** | Khởi chạy độc lập chức năng **Tab 3: Điểm** |
-| **Phím F8** | Khởi chạy độc lập chức năng **Tab 4: Zeno** |
-| **Phím F6** hoặc **Phím A** | **DỪNG KHẨN CẤP TOÀN BỘ (Global Stop)** tất cả tiến trình đang thực thi |
+## IV. Tab 3 — ĐIỂM (ID 3)
 
-### 2. Lệnh Chat (Chat Commands)
-Người chơi có thể gõ các lệnh sau vào khung chat trong game:
-* `gop` hoặc `autogop`: Bật/Tắt cửa sổ giao diện Auto Gộp.
-* `f3` hoặc `chaygop`: Bắt đầu chạy quy trình tổng thể (tương đương phím F3).
-* `f6` hoặc `dunggop`: Dừng toàn bộ hệ thống (tương đương phím F6).
+- NPC `66` trên map `5`; giữ phân tích điểm từ menu NPC cấp 1, bảo vệ không đọc nhầm menu cấp 2.
+- Giữ 5 mốc `10Tr`, `5K`, `3K`, `200`, `50`; giữ các tùy chọn và delay `delayDiemMs=350ms`.
+- **### SỬA/ UPDATE ###** `autoSelectMocDiem` mặc định **FALSE (tắt)**; khi tắt, sử dụng chính xác mốc người dùng chọn, không tự nâng/hạ mốc.
+- **### SỬA/ UPDATE ###** `targetBatchesDiem` mặc định **1 lượt** (thay 50). Để mặc định 1 lượt thực sự có tác dụng, cấu hình khởi tạo `stopConditionDiem=1` (ĐK1 đủ lượt). Người dùng vẫn có thể chuyển ĐK2 nếu muốn dừng do thiếu điểm.
+- Giữ routing Điểm (đích mặc định Zeno ID 4). Không tự tính là 'thành công' chỉ do gửi lệnh nếu có cách xác nhận giao dịch từ server; tối thiểu cần log trạng thái chờ xác nhận.
 
----
+## V. Tab 4 — ZENO (ID 4): SỬA LỖI VÀ BỎ XMAP
 
-## III. CHI TIẾT 5 TAB CHỨC NĂNG & THÔNG SỐ ĐÃ HOÀN THIỆN
+### 1. Quy tắc bất biến
 
-```
-┌────────────────────────────────────────────────────────┐
-│ [ Chung ]   [ Bánh ]   [ HN ]   [ Điểm ]   [ Zeno ]    │
-└────────────────────────────────────────────────────────┘
-```
+> Chỉ thị mới **bỏ XMap Zeno** thay thế hoàn toàn ghi chú cũ `CHỈ DÙNG CHỨC NĂNG NÀY Ở ĐẢO KAME` trong tài liệu update trước đó. Không suy diễn rằng Zeno vẫn có quyền XMap khi bắt đầu ở Đảo Kame.
 
----
+- Item **Vé Zeno / Tiên Phù** ID `1583`; NPC **Thần Mèo Karin** ID `18`, map **46**.
+- `batchQtyZeno=19800`, `targetBatchesZeno=1`, `delayZenoMs=350` mặc định, người dùng vẫn chỉnh được.
+- Nhánh 1 **Đổi đủ đợt**: `enableRouteDoneZeno` → đích mặc định HN ID `2`.
+- Nhánh 2 **Thiếu vé THẬT**: `enableRouteLackZeno` → đích mặc định Bánh ID `1`, chỉ kích hoạt sau khi xác minh `count(1583) < batchQtyZeno` hoặc server thực sự trả về lỗi thiếu vé.
+- **### SỬA/ UPDATE ### XÓA HOÀN TOÀN TỰ ĐỘNG XMAP CỦA TAB ZENO.** Không gọi `StartXmapToNpc(4,46,18)`, `XmapController.StartRunToMapId(46)`, không tự `FinishXmap`, không đi/teleport/chuyển map từ map Kame tới 46 hoặc ngược lại như một phần Auto Zeno. Loại bỏ state chờ XMap `7` **khỏi đường đi của tab Zeno**. Không thay đổi tính năng XMap độc lập của các mod/tab khác nếu có.
+- Nếu không ở map 46 hoặc chưa có NPC 18: thông báo rõ `Zeno yêu cầu đứng sẵn tại Tháp Karin (map 46), NPC 18` và **không** mở menu, **không** gọi nhánh thiếu vé. `F8` độc lập: kết thúc an toàn. `F3` workflow: dừng/tạm dừng toàn chu trình với lý do `WRONG_MAP_ZENO` để người chơi tự chuyển map; không tiếp tục gọi vòng qua các tab trên map 5 như thể đổi thành công.
+- Chỉ tương tác NPC 18 khi xác định map 46, NPC đã tải xong, nhân vật ở vị trí hợp lệ với NPC. Đặt npcFocus chính xác; không thay tọa độ `cx/cy` và lập tức `charMove()` theo kiểu dịch chuyển giả nếu server chưa xác nhận vị trí. Nếu đã ở gần, không di chuyển thêm.
 
-### 1. Tab 0: Chung (`ID: 0`) - Điều Phối Quy Trình Tổng Thể
+### 2. Luồng giao dịch đúng và xử lý menu
 
-Tab này đóng vai trò là "Bộ chỉ huy", liên kết 4 tiến trình con thành một chuỗi vòng tròn khép kín hoặc chạy có số vòng nhất định.
+`Idle → CheckMapNpcTickets → OpenMenu(18) → WaitMenu1 → SelectExchange → WaitMenu2 → SelectZeno → WaitClientInput(-125) → SendQuantityOnce → WaitServerAck/BagUpdate → Success/CooldownOrRoute`.
 
-* **Danh sách chức năng & Thứ tự chạy:**
-  * `[v] 1. Auto Bánh (92)` (`enableBanh`): Bật/Tắt tham gia quy trình. Ô nhập thứ tự `orderBanh` (Mặc định: 1).
-  * `[v] 2. Auto HN (56)` (`enableHn`): Bật/Tắt tham gia quy trình. Ô nhập thứ tự `orderHn` (Mặc định: 4).
-  * `[v] 3. Đổi Điểm (66)` (`enableDiem`): Bật/Tắt tham gia quy trình. Ô nhập thứ tự `orderDiem` (Mặc định: 2).
-  * `[v] 4. Đổi Zeno (18)` (`enableZeno`): Bật/Tắt tham gia quy trình. Ô nhập thứ tự `orderZeno` (Mặc định: 3).
-  * *Hàng đợi thực thi mặc định:* **Bánh (1) $\rightarrow$ Điểm (2) $\rightarrow$ Zeno (3) $\rightarrow$ HN (4)**.
-* **Cấu hình độ trễ & Vòng lặp:**
-  * **Delay chuyển giao (ms)** (`delayBetweenTabsMs`): Thời gian nghỉ an toàn sau khi kết thúc một tab trước khi khởi chạy tab kế tiếp (Mặc định: `500 ms`, tối thiểu `50 ms`).
-  * **Số vòng lặp (0=∞)** (`targetWorkflowLoops`):
-    * Nhập `0`: Chạy tuần hoàn vô hạn (`Vòng 1/∞`).
-    * Nhập `N > 0`: Tự dừng toàn bộ sau khi hoàn thành đúng `N` vòng lặp.
-  * **Hiển thị Real-time:** Bộ đếm `Vòng x/y` và thông tin trạng thái tab đang hoạt động.
-* **Tự động kích hoạt tính năng Server:**
-  * `[v] Tự bật Mua Nhiều (muanhieu)` (`autoChatMuaNhieu`): Tự động chat chuỗi `"muanhieu"` lên server ngay khi vào Tab Bánh hoặc Tab HN để mở khóa mua số lượng lớn (Mặc định: Tắt).
-* **Bộ tối ưu hiệu năng & Giảm giật lag:**
-  * `[v] Ẩn người&quái` (`hidePlayersAndMobs`): Bỏ qua hàm vẽ (paint) người chơi khác và quái xung quanh.
-  * `[v] Tắt chữ bay` (`hideFlyInfoMessages`): Chặn các hiệu ứng chuỗi chữ thông báo bay trên đầu nhân vật, giảm đáng kể tải CPU/GPU.
-  * `hideUi = true`: Ẩn hoàn toàn bảng menu NPC, panel shop và popup chat khi auto đang thực thi.
-* **Bảo vệ toàn vòng (`progressThisLoop`):**
-  * Trong suốt 1 vòng lặp, nếu tất cả các tab đều không mua/đổi được vật phẩm nào (do hết sạch toàn bộ tài nguyên: Hồng ngọc, Điểm, Vé Zeno, Zeno...) $\rightarrow$ Hệ thống tự dừng an toàn ngay lập tức kèm cảnh báo, tránh chạy vòng lặp ảo gây tốn tài nguyên máy.
+- **Tham chiếu backup**, không copy nguyên: tại `Backup.../DecompiledSource/Game1.Mod/AutoGop.cs` quanh dòng 682–708, logic cũ chọn menu 1 `Đổi Tiên Phù` (thường index 3), menu 2 `Tiên Phù Zeno` (thường index 0), rồi chờ `-125`.
+- Lấy **menu thực tế từ server** để xác định lựa chọn; không hardcode `3` hay `0` khi caption không khớp. Không tự chọn fallback đầu tiên khi không nhận dạng được menu. Ghi log toàn bộ caption/loại gói/index; timeout hữu hạn rồi dừng với lỗi `MENU_NOT_MATCHED`.
+- Phải xử lý đúng các định dạng server và phương thức gửi tương ứng (đối chiếu `GameCanvas` và `Service` **bản gốc**):
+  - Packet menu `32` → `GameScr.createMenu(...)` → `AutoGop.OnReceiveMenu` → `Service.confirmMenu(18,index)` (outgoing packet 32).
+  - Packet menu `33` (`OPEN_UI_MENU`) → `OnReceiveOpenUiMenu` → `Service.menu(18,menuIndex,subIndex)` (outgoing packet 22), kể cả các mục nhiều cấp `88820/88821`; không đoán subIndex.
+  - Packet `27` → `OnReceiveNewMenu` → `Service.menuId(short menuId)` (outgoing 27).
+  - Packet `-125` → `Game1.Assets.src.f.Controller2.readMessage` → `OnReceiveServerInputPacket` → `Service.sendClientInput(fields)` (outgoing -125) với **đúng số trường** và kiểu dữ liệu. Nếu định dạng trường chưa biết, log và fallback có kiểm soát, không điền cùng số lượng vào những trường không phải số lượng.
+- `OnReceive*` chỉ nhận và chặn menu của Zeno khi đang chạy Tab 4 và đúng trạng thái chờ tương ứng. Không đọc/tiêu thụ `msg.reader()` rồi trả `false` cho handler khác; không nuốt menu của mod khác.
+- Loại bỏ logic `MaybeResetZenoMenuStepIfMainMenu` nhận dạng sai menu chính khi caption chứa `Đổi Tiên Phù Zeno`. Xác định menu cấp 1/cấp 2 qua **caption và ngữ cảnh trạng thái**. Nếu nhận lại menu chính sau khi đã chuyển state, reset có kiểm soát và mở lại đúng bước, tránh lặp menu vô tận.
+- Tách `WAIT_MENU2`, `WAIT_INPUT`, `WAIT_ACK` có timeout độc lập. Khi `stepState` chuyển trạng thái phải cập nhật đồng bộ `stateTimestamp`/retryCount và chặn gói cũ. Retry tối đa số lần cấu hình, nhưng retry lại **đúng lệnh của bước đang chờ**, không gửi lại lệnh của menu khác. Hết retry báo `MENU_TIMEOUT`, `INPUT_TIMEOUT` hay `ACK_TIMEOUT` chính xác, **không** chuyển thành `FinishZenoLack`.
+- Sau khi gửi số lượng, chỉ cập nhật `completedBatchesZeno`/`progressThisLoop` nếu có bằng chứng server đã xử lý thành công (ví dụ số vé ID 1583 giảm đúng lượng/packet xác nhận thành công). **Không tăng ngay khi gửi -125**. Không mặc định một lần request là một lần đổi.
+- `hideUi=true` chỉ ẩn trình bày; không đóng `GameCanvas.menu`, `ClientInput`, popup trước khi các handler đã xử lý nội dung quan trọng. Thử riêng `hideUi=false` để chẩn đoán menu.
+- Không phát sinh giao dịch lặp do một menu/packet bị gửi hai lần (idempotency hoặc cờ `pendingTransaction`).
 
----
+### 3. Phân loại kết thúc Zeno
 
-### 2. Tab 1: Bánh (`ID: 1`) - Mua & Dùng Bánh Tại Goku
+| Mã | Điều kiện | Hành động |
+| --- | --- | --- |
+| `ZENO_DONE` | Đã xác minh đủ số đợt thành công | Nhánh 1 (nếu bật) hoặc hoàn tất tab |
+| `ZENO_LACK_TICKETS` | `count(1583) < batchQtyZeno`, hoặc server xác nhận thiếu vé | Nhánh 2 (nếu bật) hoặc hoàn tất tab |
+| `WRONG_MAP_ZENO` | Không đứng ở map 46 / NPC18 chưa sẵn sàng | Dừng hoặc tạm dừng với hướng dẫn thủ công, **không** dùng nhánh 2 |
+| `ZENO_MENU_ERROR` | Không có menu phù hợp hoặc chọn menu không phản hồi | Dừng báo lỗi, **không** dùng nhánh 2 |
+| `ZENO_INPUT_TIMEOUT` | Không nhận `-125` đúng bước | Dừng báo lỗi, **không** dùng nhánh 2 |
+| `ZENO_SERVER_REJECT` | Server từ chối giao dịch (không phải thiếu vé) | Dừng báo lỗi thật, không đếm thành công |
 
-* **Thông số cố định:**
-  * **Vật phẩm:** Bánh (ID mặc định `1337`).
-  * **NPC phục vụ:** Goku Sự Kiện (NPC ID `92`, Map Kame - ID `5`).
-  * **Loại mua Shop:** `targetBuyTypeBanh = 3`.
-* **Hiển thị Real-time trên giao diện:**
-  * Dòng số lượng bánh trong rương: **`Bánh: [Số lượng]`** (quét từ `arrItemBag`).
-  * Dòng số dư Hồng Ngọc: **`H.Ngọc: [Số dư]`** (Đọc từ `Char.myCharz().luongKhoa` hoặc Ruby ID `861`, rút gọn theo chuẩn `K`, `M`, `B` như `1.25B`, `50M`).
-* **Cấu hình đợt mua:**
-  * **Số lượng / đợt** (`batchQtyBanh`): Số lượng bánh mua trong 1 lần gửi gói tin (Mặc định: `1000`, min 1, max 1000).
-  * **Độ trễ mỗi đợt** (`delayBuyBanhMs`): Thời gian chờ giữa 2 lần mua liên tiếp (Mặc định: `600 ms`). ### SỬA DELAY ###
-* **Hệ thống điều kiện dừng (Hỗ trợ tích chọn đồng thời cả 3 ĐK):**
-  * `[ ] ĐK 1: Đủ số đợt mua` (`stopBanhCond1` + `targetBatchesBanh`): Dừng khi đạt chỉ tiêu số đợt (Mặc định: `50` đợt).  ### BỎ ĐI ĐIỀU KIỆN 1 NÀY ###
-  * `[v] ĐK 2: Đầy rương / Hết tài nguyên` (`stopBanhCond2`): Dừng khi rương hết ô trống hoặc thiếu Hồng Ngọc / Ruby / nguyên liệu icon (Mặc định: Bật).
-  * `[v] ĐK 3: Đạt mốc -> Dùng hết` (`stopBanhCond3` + `targetItemCountBanh`):
-    * Khi số lượng bánh trong rương $\ge$ Mốc chỉ định (Mặc định: `5000` cái): Tự động ngừng mua và chuyển sang chế độ **Tự động dùng sạch bánh trong rương** (`isUsingAllBanh`). ### Ở CHỖ NÀY CHỈ CẦN DÙNG BÁNH 1 LẦN THAY VÌ DÙNG DELAY 200MS NHƯ CŨ ###
-    * Tốc độ dùng bánh: Cứ mỗi `delayUseBanhMs` (`200 ms`) tự động gọi `UseItemInBag(1337)`.
-    * Khi rương sạch bóng bánh $\rightarrow$ Hoàn tất Tab Bánh và chuyển bước.
-  * *Quy tắc phối hợp:* Nếu ĐK 2 kích hoạt (rương đầy hoặc hết hồng ngọc) mà trong rương vẫn còn bánh (khi có bật ĐK 3), tool sẽ tự dùng hết số bánh hiện có trước khi chuyển sang tab kế tiếp.
-* **Cơ chế rẽ nhánh cục bộ (Local Routing):**
-  * `[v] Rẽ nhánh khi xong ->` (`enableRoutingBanh`): Tùy chọn bật/tắt rẽ nhánh.
-  * Ô nhập Tab đích (`routeTargetTabBanh`): Mặc định nhảy sang **Tab Điểm (ID: 3)**.
+## VI. Động cơ trạng thái / Routing
 
----
+- Trạng thái tổng quát các tab Bánh/HN/Điểm có thể giữ `stepState=0..6`; `7` chỉ còn dùng nếu một chức năng **khác Zeno** thực sự cần XMap. Tab Zeno không được đi qua trạng thái 7.
+- Ở Zeno, dùng state/substate riêng theo menu/input/ack để không nhầm `stepState=3` (Shop của Bánh/HN) với chờ menu cấp 2 Zeno.
+- Local routing ưu tiên hơn queue **chỉ khi tab thực sự hoàn tất hoặc đúng loại thiếu tài nguyên**. Lỗi map/menu/input **không phải** thành công hoặc thiếu vé.
+- Tránh `StartTab` gọi đệ quy liên tiếp trong cùng frame gây loop; chuyển tab qua hàng đợi sự kiện/trạng thái có delay/giới hạn chuyển đổi.
+- Ngăn vòng lặp vô hạn khi bật route `HN→Zeno→Bánh` nhưng Zeno không có mặt trên map hiện tại. Trình bày rõ trên UI rằng workflow nhiều map cần di chuyển **thủ công**.
+- `progressThisLoop` chỉ tính giao dịch thành công được server xác nhận.
 
-### 3. Tab 2: HN (`ID: 2`) - Mua & Sử Dụng Hồng Ngọc
+## VII. Bảo vệ / Tối ưu
 
-* **Thông số cố định:**
-  * **Vật phẩm:** BOX HỒNG NGỌC SSS (HN) (ID mặc định `1581`).
-  * **NPC phục vụ:** NPC ID `56` (Map Kame - ID `5`).
-  * **Loại mua Shop:** `targetBuyTypeHn = 3`.
-  * **Vật phẩm tiêu hao để mua:** Zeno (Item ID `1378`). Giá: `40.000 Zeno / 1 HN`.
-* **Hiển thị Real-time trên giao diện:**
-  * Dòng số HN trong rương: **`Rương: [Số lượng]`**.
-  * Dòng số lượng Zeno hiện có: **`Zeno: [Số lượng]`** (Rút gọn định dạng `K`, `M`, `B`).
-* **Cấu hình đợt mua:**
-  * **Số lượng / đợt** (`batchQtyHn`): Mặc định `1000` (min 1, max 1000).
-  * **Số đợt cần mua** (`targetBatchesHn`): Mặc định `50` đợt.
-  * **Độ trễ mỗi đợt** (`delayBuyHnMs`): Mặc định `600 ms`. ### SỬA DELAY ###
-  * ### BỎ ĐI CÁI NÀY ### `[v] Vừa mua vừa dùng (1581)` (`autoUseHn`): Sau mỗi đợt mua thành công, tự động kích hoạt dùng ngay 1 vật phẩm ID `1581` trong hành trang.
+- Giữ chống đệ quy thông báo `Notify`/`suppressInfoHook`/`inServerInfo`; giữ cache rương nếu phù hợp, nhưng **vô hiệu hóa/invalidate cache trước xác nhận inventory sau giao dịch**, không đọc cache 100ms cũ để kết luận.
+- Giữ timeout hữu hạn, không đổi timeout thành hết tài nguyên một cách suy đoán. Ghi log dạng `[AutoGop][Zeno] map, npc, step, packet, caption, menuIndex, subIndex, ticketBefore, ticketAfter, elapsed, reason`.
+- Gói lỗi `-26`, popup `38` phải được phân tích trước khi ẩn. `hideUi=false` phải thể hiện menu/ô nhập bình thường. Không sửa cơ chế ẩn UI của các tab khác ngoài phần cần thiết để chúng không bị ảnh hưởng.
+- Bảo đảm `F6` dừng sạch và không có callback muộn của tab Zeno tiếp tục gửi giao dịch.
 
-* **Hệ thống điều kiện dừng:**
-  * `(o) ĐK 1: Đủ đợt` (`stopConditionHn = 1`): Dừng khi đạt `targetBatchesHn`.
-  * `(o) ĐK 2: Đầy/Hết` (`stopConditionHn = 2`): Dừng khi rương đầy hoặc không đủ tiền/tài nguyên. ### BỎ ĐI ĐK 2, THAY VÀO ĐÓ CÓ THỂ CHỌN 1 HOẶC 3 ###
-  * `[v] ĐK 3: Zeno < [Mốc] (SL x 40K)` (`stopHnCond3`):
-    * Công thức tính mốc an toàn: $\text{Mốc Zeno} = \text{batchQtyHn} \times 40.000\text{ Zeno}$.
-    * Ví dụ mua 1.000 cái $\rightarrow$ Mốc cần là `40.000.000 Zeno`.
-    * Client chủ động kiểm tra trước (Pre-check): Nếu Zeno trong rương nhỏ hơn mốc này $\rightarrow$ Dừng mua ngay lập tức và chuyển tab, hoàn toàn không gửi gói tin lỗi lên server.
-* **Cơ chế rẽ nhánh cục bộ (Local Routing):**
-  * `[v] Rẽ nhánh khi xong ->` (`enableRoutingHn`): Mặc định bật.
-  * Ô nhập Tab đích (`routeTargetTabHn`): Mặc định nhảy sang **Tab Zeno (ID: 4)**.
+## VIII. Nguồn đối chiếu và phạm vi file
 
----
+1. **Repo hiện tại (nguồn chính cần sửa):** `DecompiledSource/Game1.Mod/AutoGop.cs`, `DecompiledSource/Game2.Mod/AutoGop.cs`, và đúng vị trí hook nếu thật sự cần tại `Game1/Game2` `Controller.cs`, `GameScr.cs`, `Game1.Assets.src.f/Controller2.cs` và bản Game2 tương ứng.
+2. **Backup chạy Zeno kiểu cũ (tham khảo, chưa hoàn thiện):** `Backup_Snapshot_20261112_144724.zip` → `DecompiledSource/Game1.Mod/AutoGop.cs` khoảng dòng 487–502, 682–708, 719–827; không được copy đè file nguyên khối.
+3. **Game nguyên bản:** `PC_V2.rar` → `ProjCompleted_Data/Managed/Assembly-CSharp.dll` (không có `AutoGop`), dùng để đối chiếu `Service.openMenu`, `confirmMenu`, `menu`, `menuId`, `sendClientInput`, và menu/event của `GameCanvas`/`Controller`. Không ghi đè bản mod.
+4. **Nguồn duplicate:** `MyMod/AutoGop_Game1.cs`, `MyMod/AutoGop_Game2.cs` và bản `MyMod/AutoGop/AutoGop.cs` có thể là bản sao/đời cũ; kiểm tra pipeline build trước khi sửa. `MyMod/build_mod.ps1` build từ `DecompiledSource/Assembly-CSharp.csproj`; **không sửa nhầm file không được build**.
+5. Không sửa module Bánh/HN/Điểm ngoài phạm vi mục II–IV, không đụng hành vi game gốc khác.
 
-### 4. Tab 3: Điểm (`ID: 3`) - Đổi Điểm Nồi Bánh
+## IX. Kiểm thử/tiêu chí chấp nhận bắt buộc
 
-* **Thông số cố định:**
-  * **NPC phục vụ:** Nồi Bánh (NPC ID `66`, Map Kame - ID `5`).
-* **Đọc điểm Real-time từ Server:**
-  * Điểm làm bánh được trích xuất tự động qua biểu thức chính quy (Regex) từ lời thoại Menu cấp 1 của NPC 66 (`ParseDiemPoints`).
-  * Có bộ lọc chống đọc nhầm các mốc chữ số tại Menu cấp 2.
-  * Cảnh báo đồ họa góc phải: Nhãn đỏ **`Bật Lọc Đồ!`** để nhắc người chơi dọn rác rương.
-* **Danh sách 5 mốc điểm hỗ trợ:**
-  * `10Tr` ($10.000.000\text{đ}$)
-  * `5K` ($5.000\text{đ}$)
-  * `3K` ($3.000\text{đ}$)
-  * `200` ($200\text{đ}$)
-  * `50` ($50\text{đ}$)
-* **Cơ chế tự động chọn mốc thông minh:**
-  * `[v] Tự động chọn mốc (10Tr -> 5K -> 3K)` (`autoSelectMocDiem`): ### MẶC ĐỊNH LÀ TẮT ###
-    * Điểm $\ge 10.000.000\text{đ} \rightarrow$ Tự động chọn mốc **10Tr**.
-    * Điểm $\ge 5.000\text{đ} \rightarrow$ Tự động chọn mốc **5K**.
-    * Điểm $\ge 3.000\text{đ} \rightarrow$ Tự động chọn mốc **3K**.
-    * Điểm $< 3.000\text{đ} \rightarrow$ Tự động kết luận hết điểm và chuyển tab.
-* **Cấu hình & Điều kiện dừng:**
-  * **Số lượt cần đổi** (`targetBatchesDiem`): Mặc định `1` lượt. ### SỬA LƯỢT ###
-  * **Độ trễ mỗi lượt** (`delayDiemMs`): Mặc định `350 ms`.
-  * `(o) ĐK 1: Đủ lượt` (`stopConditionDiem = 1`).
-  * `(o) ĐK 2: Đầy/Hết điểm` (`stopConditionDiem = 2`): Dừng khi điểm hiện có nhỏ hơn mốc yêu cầu.
-* **Cơ chế rẽ nhánh cục bộ (Local Routing):**
-  * `[v] Rẽ nhánh khi xong ->` (`enableRoutingDiem`): Tùy chọn bật/tắt.
-  * Ô nhập Tab đích (`routeTargetTabDiem`): Mặc định nhảy sang **Tab Zeno (ID: 4)**.
+| # | Test | Kỳ vọng |
+|---|---|---|
+| 01 | F8 tại map 5 đủ vé | Không XMap, không mở menu NPC18; báo sai map và dừng an toàn |
+| 02 | F3 tại map 5 đến lượt Zeno | Dừng/tạm dừng workflow báo cần tới Karin thủ công, không báo thiếu vé, không loop |
+| 03 | F8 tại map 46, NPC18 sẵn sàng, đủ vé | Mở đúng menu cấp 1/2 → nhận -125 → gửi 1 lần đúng số lượng |
+| 04 | Menu 32 có vị trí `Đổi Tiên Phù` thay đổi | Chọn theo caption thật, không hardcode index 3 |
+| 05 | Menu 33 có sub-menu hoặc menu 27 có menuId | Gửi đúng phương thức `Service.menu`/`Service.menuId` và index/id thực |
+| 06 | Menu không có mục đổi Zeno | Không tự chọn 0/3; báo lỗi menu rõ ràng |
+| 07 | Đủ vé nhưng server không gửi -125 | Timeout đúng tên, không kích hoạt nhánh 'thiếu vé' |
+| 08 | Gửi -125 nhưng giao dịch bị server từ chối | Không tăng đợt, không báo thành công |
+| 09 | Đổi Zeno thành công 1 đợt, mục tiêu=1 | Xác nhận vé giảm/ack, tăng đúng 1 và chọn nhánh HN |
+| 10 | Vé < batchQtyZeno từ đầu | Chỉ trường hợp này (hoặc server xác nhận thiếu vé) mới dùng nhánh Bánh |
+| 11 | `hideUi=true` và `hideUi=false` | Cả hai đều đổi được; false hiện menu khi cần chẩn đoán |
+| 12 | F6 khi đang chờ menu/input/ack | Dừng sạch, không gửi thêm packet/callback muộn |
+| 13 | Tab Bánh đủ mốc | **Chỉ gửi 1 lệnh dùng Bánh** cho lần kích hoạt, không loop mỗi 200ms |
+| 14 | Tab HN | Tên BOX HỒNG NGỌC SSS, delay 600ms, **không auto-use**; chọn dừng ĐK1 hoặc ĐK3 |
+| 15 | Tab Điểm | `autoSelectMocDiem=false`, `targetBatchesDiem=1`, dừng 1 lượt mặc định |
+| 16 | Game1 và Game2 | Build thành công, tương đồng hành vi, không lỗi tên namespace hoặc encoding |
+| 17 | So sánh hồi quy | F4/F5/F7, UI, phím tắt, route cũ còn hoạt động trong giới hạn thay đổi yêu cầu |
 
----
+### Quy trình thực hiện
 
-### 5. Tab 4: Zeno (`ID: 4`) - Đổi Tiên Phù Zeno Tại Karin
-
-* **Thông số cố định:**
-  * **Vật phẩm đổi:** Vé Zeno / Tiên Phù (Item ID `1583`).
-  * **NPC phục vụ:** Thần Mèo Karin (NPC ID `18`, Tháp Karin - Map `46`).
-* **Hiển thị Real-time trên giao diện:**
-  * Hiển thị chính xác số lượng Vé Zeno (ID `1583`) đang có trong hành trang.
-* **Cấu hình đợt đổi:**
-  * **Số lượng / đợt** (`batchQtyZeno`): Mặc định `19.800` Tiên Phù (người dùng có thể chỉnh sửa tự do).
-  * **Số đợt cần đổi** (`targetBatchesZeno`): Mặc định `1` đợt.
-  * **Độ trễ mỗi đợt** (`delayZenoMs`): Mặc định `350 ms`.
-* **Cơ chế chuyển luồng 2 nhánh song song (Dual Routing):**
-  * **Nhánh 1 (Đạt mục tiêu / Đủ đợt):**
-    * Checkbox độc lập `[v] Nhánh 1 (Đủ đợt) ->` (`enableRouteDoneZeno`).
-    * Khi số đợt đổi đạt `targetBatchesZeno` $\rightarrow$ Tự động nhảy sang Tab đã cấu hình (Mặc định: **Tab HN - ID: 2**).
-  * **Nhánh 2 (Thiếu vé):**
-    * Checkbox độc lập `[v] Nhánh 2 (Vé < 19.800) ->` (`enableRouteLackZeno`).
-    * Khi kiểm tra thấy số vé trong hành trang $< \text{batchQtyZeno}$ $\rightarrow$ Tự động nhảy sang Tab đã cấu hình (Mặc định: **Tab Bánh - ID: 1**).
-* **Hỗ trợ tự động tìm đường XMap:**
-  * Nếu nhân vật đang đứng ở map khác mà không có NPC 18 $\rightarrow$ Tự động kích hoạt thuật toán XMap di chuyển tới **Tháp Karin (Map 46)**, tiếp cận NPC 18 rồi mới tiến hành đổi. ### CHỈ DÙNG CHỨC NĂNG NÀY Ở ĐẢO KAME ###
-
----
-
-## IV. SƠ ĐỒ LUỒNG ĐIỀU KHIỂN TOÀN CỤC (WORKFLOW EXECUTION)
-
-### 1. Sơ Đồ Mermaid Quy Trình Tổng Thể
-
-```mermaid
-flowchart TD
-    Start(["Nhấn F3 (Bắt đầu Quy Trình)"]) --> CheckLoop{"Kiểm tra số vòng lặp"}
-    CheckLoop -- Đạt targetWorkflowLoops --> StopDone(["Dừng: Hoàn tất toàn bộ chu trình"])
-    CheckLoop -- Còn vòng lặp --> InitQueue["Khởi tạo hàng đợi Tab Chung<br/>(VD: Bánh -> Điểm -> Zeno -> HN)"]
-
-    InitQueue --> RunTab1["Thực thi Tab Bánh (NPC 92)"]
-    RunTab1 --> CondBanh{"Thỏa ĐK dừng Bánh?"}
-    CondBanh -- Đạt mốc bánh (ĐK 3) --> UseAllBanh["Tự động dùng sạch bánh trong rương"]
-    UseAllBanh --> CheckRouteBanh{"Bật Rẽ nhánh Bánh?"}
-    CondBanh -- Hết hồng ngọc / Đủ đợt --> CheckRouteBanh
-
-    CheckRouteBanh -- Có (Route = 3) --> JumpDiem["Nhảy thẳng sang Tab Điểm (3)"]
-    CheckRouteBanh -- Không --> NextInQueue1["Theo thứ tự Tab Chung"]
-
-    JumpDiem --> RunTab3["Thực thi Tab Điểm (NPC 66)"]
-    NextInQueue1 --> RunTab3
-
-    RunTab3 --> CondDiem{"Hết điểm (<3K) / Đủ lượt?"}
-    CondDiem -- Đúng --> CheckRouteDiem{"Bật Rẽ nhánh Điểm?"}
-    CheckRouteDiem -- Có (Route = 4) --> JumpZeno["Nhảy thẳng sang Tab Zeno (4)"]
-    CheckRouteDiem -- Không --> NextInQueue2["Theo thứ tự Tab Chung"]
-
-    JumpZeno --> RunTab4["Thực thi Tab Zeno (NPC 18)"]
-    NextInQueue2 --> RunTab4
-
-    RunTab4 --> CondZeno{"Đánh giá trạng thái Zeno"}
-    CondZeno -- Đổi đủ đợt (Nhánh 1) --> JumpHN["Nhảy sang Tab HN (2)"]
-    CondZeno -- Thiếu vé < 19.800 (Nhánh 2) --> JumpBanh["Nhảy sang Tab Bánh (1)"]
-
-    JumpHN --> RunTab2["Thực thi Tab HN (NPC 56)"]
-    RunTab2 --> CondHN{"Hết Zeno (<40M) / Đầy rương / Đủ đợt?"}
-    CondHN -- Đúng --> CheckRouteHN{"Bật Rẽ nhánh HN?"}
-    CheckRouteHN -- Có (Route = 4) --> JumpZeno2["Nhảy sang Tab Zeno (4)"]
-    CheckRouteHN -- Không --> EndRound["Hoàn tất 1 vòng quy trình"]
-
-    JumpBanh --> RunTab1
-    JumpZeno2 --> RunTab4
-    EndRound --> ProgressCheck{"Có thao tác thành công trong vòng?"}
-    ProgressCheck -- Không (Hết sạch mọi tài nguyên) --> StopSafe(["Tự dừng an toàn (Chống lặp ảo)"])
-    ProgressCheck -- Có --> NextRound["completedWorkflowLoops++<br/>Chờ delayBetweenTabsMs"] --> CheckLoop
-```
-
----
-
-### 2. Thứ Tự Ưu Tiên Chuyển Tab (Routing Priority Rules)
-
-Khi bất kỳ một Tab chức năng nào thỏa mãn điều kiện dừng:
-1. **ƯU TIÊN 1 (Cao nhất) - Định Tuyến Cục Bộ (Local Routing):**
-   * Nếu Checkbox rẽ nhánh của Tab đó đang **BẬT** VÀ Tab đích khác với chính nó:
-   * $\rightarrow$ **Hệ thống lập tức nhảy thẳng sang Tab đích được chỉ định**, hoàn toàn bỏ qua thứ tự của hàng đợi Tab Chung.
-2. **ƯU TIÊN 2 - Hàng Đợi Tab Chung (Workflow Queue):**
-   * Nếu Local Routing tắt, hệ thống lấy tab tiếp theo theo thứ tự ưu tiên (1, 2, 3, 4) đã tích chọn tại Tab Chung.
-3. **ƯU TIÊN 3 - Vòng Lặp Kế Tiếp:**
-   * Khi hoàn thành tab cuối cùng trong hàng đợi $\rightarrow$ Tăng số vòng `completedWorkflowLoops++`, chuyển tiếp về tab đầu tiên.
-4. **ƯU TIÊN 4 - Dừng Toàn Bộ:**
-   * Kích hoạt khi đạt `targetWorkflowLoops` HOẶC khi cả một vòng không có bất kỳ tiến trình nào thực hiện được (`!progressThisLoop`).
-
----
-
-### 3. Máy Trạng Thái Của Engine (Engine State Machine: `stepState 0 -> 7`)
-
-```
-[stepState = 1] ──> [stepState = 2] ──> [stepState = 3] ──> [stepState = 4] ──> [stepState = 5] ──> [stepState = 6]
- (Tiếp cận NPC)      (Chờ mở Menu)      (Mở Shop/Đổi)       (Nhập số lượng)    (Cooldown/Dùng)    (Chuyển Tab)
-       │
-       └── [stepState = 7: Chờ XMap di chuyển tới Map chứa NPC]
-```
-
-* **`stepState = 0` (Idle):** Trạng thái nghỉ hoàn toàn khi hệ thống dừng hoặc hoàn tất.
-* **`stepState = 1` (Approach & Open):** Nhân vật di chuyển sát NPC mục tiêu (`MoveCloseToNpc`) và gửi gói tin `Service.gI().openMenu(npcId)`.
-* **`stepState = 2` (Wait Menu):** Chờ gói tin Menu trả về từ server (`OnReceiveMenu`). Tự động chọn đúng dòng menu (Cửa hàng / Đổi điểm / Đổi Tiên Phù) và gửi xác nhận `confirmMenu`.
-* **`stepState = 3` (Wait Shop):** Đón gói dữ liệu Shop (Packet `-44` $\rightarrow$ `OnShopOpened`), ẩn Panel Shop và kích hoạt lệnh mua.
-* **`stepState = 4` (Wait Server Input - Packet `-125`):** Đón gói yêu cầu nhập số lượng từ Server, gửi số lượng trực tiếp qua Socket bằng hàm `SendClientInputDirect`, tăng biến đếm đợt mua và ghi nhận tiến độ vòng lặp.
-* **`stepState = 5` (Cooldown & Sub-action):** Đếm lùi thời gian Delay cấu hình riêng của từng tab (`delayBuyBanhMs`, `delayBuyHnMs`, `delayDiemMs`, `delayZenoMs`). Thực thi các tác vụ phụ như tự dùng hết bánh (`UseItemInBag(1337)`) hoặc dùng HN (`UseItemInBag(1581)`).
-* **`stepState = 6` (Transition Delay):** Nghỉ đệm an toàn giữa 2 Tab chức năng khác nhau (`delayBetweenTabsMs`) trước khi kích hoạt `StartTab(nextTab)`.
-* **`stepState = 7` (Wait XMap):** Trạng thái chờ hệ thống XMap đưa nhân vật tới map đích nếu chưa ở đúng vị trí của NPC.
-
----
-
-### NẾU CÁC CƠ CHẾ DƯỚI ĐÂY ẢNH HƯỞNG ĐẾN QUÁ TRÌNH AUTO/GÂY LỖI Ở ĐÂU ĐẤY THÌ BỎ QUA CƠ CHẾ ĐÓ LUÔN ###
-
-## V. CÁC CƠ CHẾ BẢO VỆ CHỐNG TREO, ĐƠ GAME & TỐI ƯU HIỆU NĂNG
-
-1. **Triệt Tiêu Hoàn Toàn Lỗi Đơ Do Đệ Quy Thông Báo (Anti-Recursion):**
-   * Sử dụng hàm thông báo riêng biệt `Notify(string text)` với cơ chế cờ kép `suppressInfoHook` và `inServerInfo`.
-   * Khóa chặn hoàn toàn việc `InfoMe.addInfo` đưa chuỗi ngược trở lại `OnServerInfo`, ngăn chặn vĩnh viễn vòng lặp thông báo vô tận làm treo client.
-2. **Kiểm Tra Trước Tại Client (Client Pre-check):**
-   * Trước khi gửi lệnh mua, tool tự động kiểm tra trước: Ô trống hành trang, Số dư Xu, Ngọc, Hồng Ngọc, Ruby, Nguyên liệu Icon, và Số lượng Zeno.
-   * Nếu không đủ điều kiện $\rightarrow$ Nhảy tab tức thì với độ trễ 0ms, không gửi gói tin rác lên server.
-3. **Đánh Chặn & Hủy Popup Hộp Thoại Server (Packet Interception):**
-   * **Gói `-26` (Dialog cảnh báo):** Khi server gửi popup báo lỗi (VD: *"Không đủ tiền"*, *"Hành trang đầy"*), tool lập tức gọi `GameCanvas.endDlg()` để đóng popup ngay lập tức, không để modal che khuất màn hình.
-   * **Gói `38` (NPC ChatPopup):** Tự động ẩn bong bóng chat của NPC khi `hideUi = true`.
-4. **Cơ Chế Timeout Fallback Đa Tầng:**
-   * **Timeout gói `-125` (2.5s):** Chỉ retry tối đa 1 lần; nếu server không phản hồi $\rightarrow$ Xác định hết tài nguyên và chuyển tab ngay.
-   * **Timeout mở NPC / Menu (3.5s x 3 lần):** Nếu sau 3 lần thử mở NPC thất bại $\rightarrow$ Tự động chuyển tab an toàn, không treo đứng nhân vật.
-5. **Tối Ưu Tốc Độ & Phần Cứng:**
-   * **Cache quét túi đồ (100ms):** Hàm `GetBagItemCount` lưu kết quả vào bộ nhớ đệm, giới hạn tối đa 10 lần duyệt mảng mỗi giây thay vì duyệt hàng trăm lần/frame.
-   * **SendClientInputDirect:** Gửi trực tiếp byte stream qua session TCP, không thông qua đối tượng giao diện `TField`, tốc độ phản hồi tính bằng mili-giây.
-
----
-
-## VI. PHÂN BỔ MÃ NGUỒN TRONG DỰ ÁN
-
-| Đường dẫn tệp tin | Nội dung / Vai trò |
-| :--- | :--- |
-| `DecompiledSource/Game1.Mod/AutoGop.cs` | Logic chính của toàn bộ hệ thống Auto Gộp (Client Game 1) |
-| `DecompiledSource/Game2.Mod/AutoGop.cs` | Bản đồng bộ hoàn toàn cho Client Game 2 (Namespace: `Game2.Mod`) |
-| `DecompiledSource/Game1/Controller.cs` | Đánh chặn gói tin Shop (`-44`), Dialog (`-26`), Chat NPC (`38`), Điểm (`32`) |
-| `DecompiledSource/Game1/Char.cs` & `Mob.cs` | Tùy biến bỏ qua vẽ nhân vật và quái khi `hidePlayersAndMobs = true` |
-| `DecompiledSource/Game1/InfoMe.cs` | Lọc bỏ thông báo chữ bay khi `hideFlyInfoMessages = true` |
-| `Kehoach/autogop.md` | Tài liệu đặc tả kỹ thuật và luồng vận hành chính thức của Auto Gộp BẢN GỐC |
-| `Kehoach/autogop_update.md` | Tài liệu đặc tả kỹ thuật và luồng vận hành chính thức của Auto Gộp BẢN UPDATE |
+- Tạo nhánh/snapshot trước sửa; so sánh diff với bản gốc và backup; chỉ chỉnh file có trong pipeline build.
+- Cập nhật unit/simulation tests **thực sự bám theo logic sản phẩm**, không chỉ `Contains("...")`; thêm test các transition, packet, timeout, stop, routing, invalid menu và wrong map.
+- Chạy kiểm thử 100% PASS trước build theo `AGENTS.md`; build `DecompiledSource/Assembly-CSharp.csproj` theo pipeline dự án; không tự ý chạy lệnh xóa dữ liệu hoặc thay DLL gốc tham chiếu.
+- Sau build, phải thử nghiệm in-game vì static test không thể chứng minh server chấp nhận menu hay giao dịch.
+- Báo cáo rõ file/dòng sửa, bug root cause đã chứng minh, test PASS/FAIL, tình trạng test game thực tế và mọi giới hạn còn lại.

@@ -1,14 +1,37 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using System.Text.RegularExpressions;
 using Game1.Assets.src.g;
-using Game1.Mod.XMAP;
 using UnityEngine;
 
 namespace Game1.Mod;
 
 public class AutoGop : IChatable
 {
+	public enum ZenoStepState
+	{
+		None,
+		ApproachNpc,
+		WaitMenu1,
+		WaitMenu2,
+		WaitInput,
+		WaitServerAck,
+		Cooldown
+	}
+
+	public enum ZenoEndCode
+	{
+		None,
+		ZENO_DONE,
+		ZENO_LACK_TICKETS,
+		WRONG_MAP_ZENO,
+		ZENO_MENU_ERROR,
+		ZENO_INPUT_TIMEOUT,
+		ZENO_ACK_TIMEOUT,
+		ZENO_SERVER_REJECT
+	}
+
 	private static AutoGop _instance;
 
 	public bool isShowWindow;
@@ -67,19 +90,13 @@ public class AutoGop : IChatable
 
 	public int batchQtyBanh = 1000;
 
-	public int targetBatchesBanh = 50; // 0 = vô hạn
-
-	public int delayBuyBanhMs = 200;
-
-	public bool stopBanhCond1; // ĐK 1: Đủ số đợt mua
+	public int delayBuyBanhMs = 600;
 
 	public bool stopBanhCond2 = true; // ĐK 2: Đầy rương / Hết tài nguyên
 
-	public bool stopBanhCond3 = true; // ĐK 3: Đạt mốc bánh trong rương -> Tự dùng hết
+	public bool stopBanhCond3 = true; // ĐK 3: Đạt mốc bánh trong rương -> Tự dùng 1 lần
 
 	public int targetItemCountBanh = 5000; // Mốc số bánh trong rương cho ĐK 3
-
-	public int delayUseBanhMs = 200; // Delay khi dùng bánh
 
 	public bool enableRoutingBanh; // Mặc định tắt (false)
 
@@ -89,10 +106,16 @@ public class AutoGop : IChatable
 
 	private bool isUsingAllBanh;
 
-	// === TAB 2: HN (Item ID: 1581, NPC ID: 56) ===
+	private bool banhUseSent;
+
+	private long banhUseSentTimestamp;
+
+	private const int BanhUseVerifyTimeoutMs = 1200;
+
+	// === TAB 2: BOX HỒNG NGỌC SSS (Item ID: 1581, NPC ID: 56) ===
 	public int targetItemIdHn = 1581;
 
-	public string targetItemNameHn = "HN";
+	public string targetItemNameHn = "BOX HỒNG NGỌC SSS";
 
 	public sbyte targetBuyTypeHn = 3;
 
@@ -100,11 +123,9 @@ public class AutoGop : IChatable
 
 	public int targetBatchesHn = 50; // 0 = vô hạn
 
-	public int delayBuyHnMs = 200;
+	public int delayBuyHnMs = 600;
 
-	public bool autoUseHn = true; // Vừa mua vừa dùng vật phẩm
-
-	public int stopConditionHn = 1; // 1: Đạt đủ số lượng. 2: Hết tài nguyên / hành trang đầy
+	public int stopConditionHn = 1; // 1: ĐK 1 Đủ đợt. 3: ĐK 3 Zeno < SL x 40K
 
 	public bool enableRoutingHn = true; // Bật tính năng chuyển hướng cục bộ
 
@@ -114,29 +135,27 @@ public class AutoGop : IChatable
 
 	public int completedBatchesHn;
 
-	public bool stopHnCond3 = true; // ĐK 3: Zeno trong rương < Số lượng/đợt x 40K
-
 	public const int ZenoItemId = 1378; // Vật phẩm Zeno dùng để mua HN
 
-	public const long ZenoPerHn = 40000L; // Giá 1 HN = 40.000 Zeno
+	public const long ZenoPerHn = 40000L; // Giá 1 BOX HN SSS = 40.000 Zeno
 
 	// === CHỐNG ĐỆ QUY THÔNG BÁO (Fix đơ game) ===
 	private bool suppressInfoHook;
 
 	private bool inServerInfo;
 
-	private bool progressThisLoop; // Có mua/đổi được gì trong vòng hiện tại không
+	private bool progressThisLoop; // Có mua/đổi được gì đã được server xác nhận trong vòng hiện tại không
 
 	// === TAB 3: ĐIỂM (NPC ID: 66) ===
 	public int pointIndex = 1; // 0: 10Tr, 1: 5K, 2: 3K, 3: 200, 4: 50
 
-	public bool autoSelectMocDiem = true; // Tự động hạ mốc từ cao xuống thấp (10Tr -> 5K -> 3K)
+	public bool autoSelectMocDiem = false; // Mặc định tắt: giữ đúng mốc người dùng chọn
 
-	public int targetBatchesDiem = 50; // 0 = vô hạn
+	public int targetBatchesDiem = 1; // Mặc định 1 lượt (0 = vô hạn)
 
 	public int delayDiemMs = 350;
 
-	public int stopConditionDiem = 2; // 1: Đổi đủ số lượt, 2: Đầy rương / Hết điểm (< Mốc)
+	public int stopConditionDiem = 1; // 1: ĐK 1 Đủ lượt, 2: ĐK 2 Đầy rương / Hết điểm (< Mốc)
 
 	public bool enableRoutingDiem; // Bật/tắt rẽ nhánh khi xong Tab Điểm
 
@@ -146,13 +165,23 @@ public class AutoGop : IChatable
 
 	public int completedBatchesDiem;
 
+	private bool pendingDiemAck;
+
+	private int pendingDiemPick = -1;
+
+	private long diemAckTimestamp;
+
+	private int diemBagUnitsSnapshot;
+
+	private int diemBagSlotsSnapshot;
+
 	public static readonly int[] RequiredPoints = new int[5] { 10000000, 5000, 3000, 200, 50 };
 
 	public static readonly string[] MocShortNames = new string[5] { "10Tr", "5K", "3K", "200", "50" };
 
 	public static readonly string[] MocFullNames = new string[5] { "10.000.000đ", "5.000đ", "3.000đ", "200đ", "50đ" };
 
-	// === TAB 4: ZENO (Item ID: 1583, NPC ID: 18) ===
+	// === TAB 4: ZENO (Item ID: 1583, NPC ID: 18 - Tháp Karin Map 5) ===
 	public int batchQtyZeno = 19800; // Mặc định 19.800
 
 	public int targetBatchesZeno = 1; // Mặc định 1
@@ -163,40 +192,60 @@ public class AutoGop : IChatable
 
 	public int routeTargetWhenDoneZeno = 2; // Nhánh 1: Đổi đủ mục tiêu -> Nhảy sang Tab HN (2)
 
-	public bool enableRouteLackZeno = true; // Bật/tắt Nhánh 2 (Thiếu vé < 19.800)
+	public bool enableRouteLackZeno = true; // Bật/tắt Nhánh 2 (Thiếu vé < SL)
 
-	public int routeTargetWhenLackZeno = 1; // Nhánh 2: Thiếu vé (< 19.800) -> Nhảy sang Tab Bánh (1)
+	public int routeTargetWhenLackZeno = 1; // Nhánh 2: Thiếu vé thật -> Nhảy sang Tab Bánh (1)
 
 	public int completedBatchesZeno;
 
-	private int zenoMenuStep; // 0: Đợi Menu 1, 1: Đợi Menu 2, 2: Đợi xác nhận
+	public ZenoStepState zenoState = ZenoStepState.None;
 
-	private int lastZenoMenu2Idx;
+	public ZenoEndCode lastZenoEndCode = ZenoEndCode.None;
 
-	private int zenoLastMenuType = 32; // 32: createMenu, 33: OPEN_UI_MENU, 27: menuId
+	public string lastZenoEndReason = string.Empty;
 
-	private int zenoLastSubIdx;
+	private bool zenoPendingTransaction;
 
-	private short zenoLastNewMenuId;
+	private int zenoTicketsBeforeBatch = -1;
 
-	private bool isWaitingXmap;
+	private bool zenoServerConfirmedSuccess;
 
-	private int xmapTargetMapId = -1;
+	private long zenoConfirmInfoMs;
 
-	private int xmapTargetNpcId = -1;
+	private int zenoTalkPassCount;
 
-	private int xmapPendingTab;
+	private int zenoMenu1ResyncCount;
 
-	private long xmapArrivedTimestamp;
+	private int zenoMenu1CmdType = 32;
 
-	private long xmapStartTimestamp;
+	private int zenoMenu1CmdIdx;
 
-	private int zenoReturnMapId = -1;
+	private int zenoMenu1CmdSubIdx;
+
+	private short zenoMenu1CmdId;
+
+	private int zenoMenu2CmdType = 32;
+
+	private int zenoMenu2CmdIdx;
+
+	private int zenoMenu2CmdSubIdx;
+
+	private short zenoMenu2CmdId;
+
+	private long approachMoveIssuedMs;
 
 	private string lastZenoDebug = string.Empty;
 
+	public readonly List<string> zenoDebugLogs = new List<string>();
+
 	// === ENGINE STATE ===
-	private int stepState; // 0: Idle, 1: Approach & Open, 2: WaitMenu, 3: WaitShop, 4: WaitInput, 5: Cooldown, 6: TransitionDelay, 7: WaitXmap
+	private int stepState; // 0: Idle, 1: Approach & Open, 2: WaitMenu, 3: WaitShop, 4: WaitInput, 5: Cooldown, 6: TransitionDelay
+
+	private int pendingRouteTab = -1;
+
+	private string pendingRouteReason = string.Empty;
+
+	private int transitionChainCount;
 
 	private long stateTimestamp;
 
@@ -267,6 +316,12 @@ public class AutoGop : IChatable
 	private static long lastBagCheckTime;
 	private static readonly Dictionary<int, int> cachedBagCounts = new Dictionary<int, int>();
 
+	public static void InvalidateBagCache()
+	{
+		lastBagCheckTime = 0;
+		cachedBagCounts.Clear();
+	}
+
 	public static int GetBagItemCount(int itemId)
 	{
 		long now = mSystem.currentTimeMillis();
@@ -298,6 +353,52 @@ public class AutoGop : IChatable
 		return count;
 	}
 
+	public static int GetTotalBagItemUnits()
+	{
+		if (Char.myCharz() == null || Char.myCharz().arrItemBag == null)
+		{
+			return 0;
+		}
+		int total = 0;
+		for (int i = 0; i < Char.myCharz().arrItemBag.Length; i++)
+		{
+			Item item = Char.myCharz().arrItemBag[i];
+			if (item != null && item.template != null)
+			{
+				total += System.Math.Max(1, item.quantity);
+			}
+		}
+		return total;
+	}
+
+	public void OnBagUpdated()
+	{
+		InvalidateBagCache();
+		if (!isRunning)
+		{
+			return;
+		}
+		if (currentRunningTab == 4 && zenoState == ZenoStepState.WaitServerAck && zenoPendingTransaction)
+		{
+			CheckZenoAckConfirmation();
+		}
+		else if (currentRunningTab == 3 && pendingDiemAck)
+		{
+			if (GetTotalBagItemUnits() != diemBagUnitsSnapshot || GetEmptyBagSlots() != diemBagSlotsSnapshot)
+			{
+				ConfirmDiemBatchSuccess("server-bag-update");
+			}
+		}
+		else if (currentRunningTab == 1 && isUsingAllBanh && banhUseSent)
+		{
+			int rem = GetBagItemCount(targetItemIdBanh);
+			if (rem <= 0)
+			{
+				CompleteBanhUsePhase("Đã dùng hết toàn bộ " + targetItemNameBanh + " trong rương");
+			}
+		}
+	}
+
 	// Gửi thông báo nội bộ mà KHÔNG kích hoạt lại OnServerInfo (tránh đệ quy vô hạn gây đơ game)
 	private void Notify(string s)
 	{
@@ -324,16 +425,7 @@ public class AutoGop : IChatable
 
 	public bool ShouldSuppressGameUi()
 	{
-		if (!isRunning || !hideUi)
-		{
-			return false;
-		}
-		// Cho phép Xmap mở Menu NPC/Capsule khi Tab Zeno đang tự di chuyển tới Tháp Karin (Map 46)
-		if (currentRunningTab == 4 && isWaitingXmap && stepState == 7)
-		{
-			return false;
-		}
-		return true;
+		return isRunning && hideUi;
 	}
 
 	public static int GetNpcIdForTab(int tabId)
@@ -354,8 +446,38 @@ public class AutoGop : IChatable
 		{
 			return string.Empty;
 		}
-		string clean = s.Replace("\r", " ").Replace("\n", " ");
+		string clean = s.Normalize(NormalizationForm.FormC).Replace("\r", " ").Replace("\n", " ").Replace("\t", " ");
 		return Regex.Replace(clean, "\\s+", " ").Trim().ToLower();
+	}
+
+	private static string JoinCaptions(IList<string> norm)
+	{
+		if (norm == null || norm.Count == 0)
+		{
+			return "[]";
+		}
+		return "[" + string.Join(" | ", norm) + "]";
+	}
+
+	private void LogZenoEvent(string packet, string caption, int menuIndex, int subIndex, int ticketBefore, int ticketAfter, long elapsedMs, string reason)
+	{
+		string msg = "[AutoGop][Zeno] map=" + TileMap.mapID
+			+ ", npc=18, step=" + zenoState
+			+ ", packet=" + packet
+			+ ", caption=" + caption
+			+ ", menuIndex=" + menuIndex
+			+ ", subIndex=" + subIndex
+			+ ", ticketBefore=" + ticketBefore
+			+ ", ticketAfter=" + ticketAfter
+			+ ", elapsed=" + elapsedMs
+			+ ", reason=" + reason;
+		lastZenoDebug = msg;
+		zenoDebugLogs.Add(msg);
+		if (zenoDebugLogs.Count > 50)
+		{
+			zenoDebugLogs.RemoveAt(0);
+		}
+		Cout.println(msg);
 	}
 
 	private static void ClearResidualGameUi()
@@ -392,23 +514,58 @@ public class AutoGop : IChatable
 
 	private static bool IsZenoSkippedOption(string m)
 	{
-		return m.Contains("hướng dẫn") || m.Contains("thông tin") || m.Contains("từ chối") || m.Contains("hủy") || m.Contains("đóng") || m.Contains("thoát") || m.Contains("không");
+		return string.IsNullOrEmpty(m)
+			|| m.Contains("hướng dẫn")
+			|| m.Contains("thông tin")
+			|| m.Contains("từ chối")
+			|| m.Contains("hủy")
+			|| m.Contains("đóng")
+			|| m.Contains("thoát")
+			|| m.Contains("quay lại")
+			|| m.Contains("trở lại")
+			|| m == "không";
 	}
 
-	private static int FindZenoMenuOptionIndex(string[] normalizedOptions, int step)
+	private static int FindZenoTalkOptionIndex(IList<string> normalizedOptions)
 	{
-		if (normalizedOptions == null || normalizedOptions.Length == 0)
+		if (normalizedOptions == null)
 		{
 			return -1;
 		}
-		if (step == 0)
+		for (int i = 0; i < normalizedOptions.Count; i++)
 		{
-			// Ưu tiên đúng vị trí index 3 của bản Backup 144724 nếu chứa "đổi tiên phù"
-			if (normalizedOptions.Length > 3 && !IsZenoSkippedOption(normalizedOptions[3]) && normalizedOptions[3].Contains("đổi tiên phù"))
+			if (normalizedOptions[i] == "nói chuyện")
 			{
-				return 3;
+				return i;
 			}
-			for (int i = 0; i < normalizedOptions.Length; i++)
+		}
+		for (int i = 0; i < normalizedOptions.Count; i++)
+		{
+			if (!IsZenoSkippedOption(normalizedOptions[i]) && normalizedOptions[i].Contains("nói chuyện"))
+			{
+				return i;
+			}
+		}
+		return -1;
+	}
+
+	private static int FindZenoMenuMatch(IList<string> normalizedOptions, ZenoStepState expectedStep)
+	{
+		if (normalizedOptions == null || normalizedOptions.Count == 0)
+		{
+			return -1;
+		}
+		if (expectedStep == ZenoStepState.WaitMenu1)
+		{
+			for (int i = 0; i < normalizedOptions.Count; i++)
+			{
+				string m = normalizedOptions[i];
+				if (!IsZenoSkippedOption(m) && m.Contains("đổi tiên phù") && !m.Contains("zeno"))
+				{
+					return i;
+				}
+			}
+			for (int i = 0; i < normalizedOptions.Count; i++)
 			{
 				string m = normalizedOptions[i];
 				if (!IsZenoSkippedOption(m) && m.Contains("đổi tiên phù"))
@@ -416,15 +573,15 @@ public class AutoGop : IChatable
 					return i;
 				}
 			}
-			for (int i = 0; i < normalizedOptions.Length; i++)
+			for (int i = 0; i < normalizedOptions.Count; i++)
 			{
 				string m = normalizedOptions[i];
-				if (!IsZenoSkippedOption(m) && (m.Contains("đổi vé") || (m.Contains("đổi") && (m.Contains("zeno") || m.Contains("tiên phù")))))
+				if (!IsZenoSkippedOption(m) && m.Contains("đổi vé"))
 				{
 					return i;
 				}
 			}
-			for (int i = 0; i < normalizedOptions.Length; i++)
+			for (int i = 0; i < normalizedOptions.Count; i++)
 			{
 				string m = normalizedOptions[i];
 				if (!IsZenoSkippedOption(m) && (m.Contains("tiên phù") || m.Contains("zeno")))
@@ -432,19 +589,11 @@ public class AutoGop : IChatable
 					return i;
 				}
 			}
-			for (int i = 0; i < normalizedOptions.Length; i++)
-			{
-				string m = normalizedOptions[i];
-				if (!IsZenoSkippedOption(m) && m.Contains("đổi") && !m.Contains("khu"))
-				{
-					return i;
-				}
-			}
-			return (normalizedOptions.Length > 3) ? 3 : 0;
+			return -1;
 		}
-		if (step == 1)
+		if (expectedStep == ZenoStepState.WaitMenu2)
 		{
-			for (int i = 0; i < normalizedOptions.Length; i++)
+			for (int i = 0; i < normalizedOptions.Count; i++)
 			{
 				string m = normalizedOptions[i];
 				if (!IsZenoSkippedOption(m) && m.Contains("tiên phù zeno"))
@@ -452,15 +601,15 @@ public class AutoGop : IChatable
 					return i;
 				}
 			}
-			for (int i = 0; i < normalizedOptions.Length; i++)
+			for (int i = 0; i < normalizedOptions.Count; i++)
 			{
 				string m = normalizedOptions[i];
-				if (!IsZenoSkippedOption(m) && m.Contains("tiên phù"))
+				if (!IsZenoSkippedOption(m) && m.Contains("tiên phù") && m.Contains("zeno"))
 				{
 					return i;
 				}
 			}
-			for (int i = 0; i < normalizedOptions.Length; i++)
+			for (int i = 0; i < normalizedOptions.Count; i++)
 			{
 				string m = normalizedOptions[i];
 				if (!IsZenoSkippedOption(m) && m.Contains("zeno") && !m.Contains("đổi vé"))
@@ -468,39 +617,39 @@ public class AutoGop : IChatable
 					return i;
 				}
 			}
-			for (int i = 0; i < normalizedOptions.Length; i++)
+			for (int i = 0; i < normalizedOptions.Count; i++)
 			{
 				string m = normalizedOptions[i];
-				if (!IsZenoSkippedOption(m) && (m.Contains("đồng ý") || m.Contains("xác nhận")))
+				if (!IsZenoSkippedOption(m) && m.Contains("tiên phù") && !m.Contains("đổi tiên phù"))
 				{
 					return i;
 				}
 			}
-			return 0;
-		}
-		for (int i = 0; i < normalizedOptions.Length; i++)
-		{
-			string m = normalizedOptions[i];
-			if (IsZenoSkippedOption(m))
+			if (normalizedOptions.Count <= 3 && !IsZenoMainMenu(normalizedOptions))
 			{
-				continue;
+				for (int i = 0; i < normalizedOptions.Count; i++)
+				{
+					string m = normalizedOptions[i];
+					if (!IsZenoSkippedOption(m) && (m == "đồng ý" || m == "xác nhận" || m.Contains("đồng ý đổi") || m.Contains("xác nhận đổi")))
+					{
+						return i;
+					}
+				}
 			}
-			if (m.Contains("đồng ý") || m.Contains("xác nhận") || m.Contains("tiên phù") || m.Contains("zeno") || m.Contains("đổi"))
-			{
-				return i;
-			}
+			return -1;
 		}
-		return 0;
+		return -1;
 	}
 
-	private void MaybeResetZenoMenuStepIfMainMenu(IList<string> normalizedOptions)
+	private static bool IsZenoMainMenu(IList<string> normalizedOptions)
 	{
-		if (zenoMenuStep == 0 || normalizedOptions == null || normalizedOptions.Count < 3)
+		if (normalizedOptions == null || normalizedOptions.Count < 2)
 		{
-			return;
+			return false;
 		}
-		bool hasTier1 = false;
-		bool hasTier2 = false;
+		bool hasPureTier1 = false;
+		bool hasZenoExchange = false;
+		bool hasOtherKarinMainItem = false;
 		for (int i = 0; i < normalizedOptions.Count; i++)
 		{
 			string m = normalizedOptions[i];
@@ -508,55 +657,62 @@ public class AutoGop : IChatable
 			{
 				continue;
 			}
-			if (m.Contains("đổi tiên phù") && !m.Contains("tiên phù zeno"))
+			if ((m.Contains("đổi tiên phù") && !m.Contains("zeno")) || m.Contains("đổi vé"))
 			{
-				hasTier1 = true;
+				hasPureTier1 = true;
 			}
-			if (m.Contains("tiên phù zeno"))
+			else if (m.Contains("đổi tiên phù") || m.Contains("tiên phù zeno"))
 			{
-				hasTier2 = true;
+				hasZenoExchange = true;
+			}
+			else if (m.Contains("nói chuyện") || m.Contains("nhiệm vụ") || m.Contains("tập luyện") || m.Contains("thách đấu") || m.Contains("cửa hàng") || m.Contains("mua bùa") || m.Contains("về"))
+			{
+				hasOtherKarinMainItem = true;
 			}
 		}
-		if (hasTier1 && !hasTier2)
+		if (hasPureTier1)
 		{
-			zenoMenuStep = 0;
+			return true;
+		}
+		return hasZenoExchange && hasOtherKarinMainItem;
+	}
+
+	private static void SendZenoPacketCommand(int cmdType, int cmdIdx, int cmdSubIdx, short cmdId)
+	{
+		if (cmdType == 33)
+		{
+			Service.gI().menu(18, cmdIdx, cmdSubIdx);
+		}
+		else if (cmdType == 27)
+		{
+			Service.gI().menuId(cmdId);
+		}
+		else
+		{
+			Service.gI().confirmMenu(18, (sbyte)cmdIdx);
 		}
 	}
 
-	private void AdvanceZenoMenuStep(int chosenOption, int menuType, int subIdx = 0, short newMenuId = 0)
+	private void RecordZenoMenuSelection(ZenoStepState currentStep, int cmdType, int cmdIdx, int cmdSubIdx, short cmdId)
 	{
-		npcRetryCount = 0;
 		retryCount = 0;
+		npcRetryCount = 0;
 		stateTimestamp = mSystem.currentTimeMillis();
-		zenoLastMenuType = menuType;
-		zenoLastSubIdx = subIdx;
-		zenoLastNewMenuId = newMenuId;
-		if (zenoMenuStep == 0)
+		if (currentStep == ZenoStepState.WaitMenu1)
 		{
-			zenoMenuStep = 1;
-			stepState = 3; // Đợi Menu cấp 2 (matching 144724 stepState = 3 + 3.5s timeout coverage)
+			zenoMenu1CmdType = cmdType;
+			zenoMenu1CmdIdx = cmdIdx;
+			zenoMenu1CmdSubIdx = cmdSubIdx;
+			zenoMenu1CmdId = cmdId;
+			zenoState = ZenoStepState.WaitMenu2;
 		}
 		else
 		{
-			lastZenoMenu2Idx = chosenOption;
-			zenoMenuStep = 2;
-			stepState = 4; // Chờ gói -125 ClientInput (hoặc Menu xác nhận)
-		}
-	}
-
-	private void SendZenoMenuRetry()
-	{
-		if (zenoLastMenuType == 33)
-		{
-			Service.gI().menu(18, lastZenoMenu2Idx, zenoLastSubIdx);
-		}
-		else if (zenoLastMenuType == 27)
-		{
-			Service.gI().menuId(zenoLastNewMenuId);
-		}
-		else
-		{
-			Service.gI().confirmMenu(18, (sbyte)lastZenoMenu2Idx);
+			zenoMenu2CmdType = cmdType;
+			zenoMenu2CmdIdx = cmdIdx;
+			zenoMenu2CmdSubIdx = cmdSubIdx;
+			zenoMenu2CmdId = cmdId;
+			zenoState = ZenoStepState.WaitInput;
 		}
 	}
 
@@ -590,13 +746,14 @@ public class AutoGop : IChatable
 	// ĐK 3 Tab HN: Zeno < Số lượng/đợt x 40K
 	private bool CheckHnZenoLack()
 	{
-		if (!stopHnCond3)
+		if (stopConditionHn != 3)
 		{
 			return false;
 		}
+		InvalidateBagCache();
 		int zeno = GetBagItemCount(ZenoItemId);
 		long need = GetZenoRequiredHn();
-		if (zeno < need)
+		if ((long)zeno < need)
 		{
 			FinishTabHn("Zeno (" + FormatShortNumber(zeno) + ") < " + FormatShortNumber(need) + " (ĐK 3)");
 			return true;
@@ -711,19 +868,35 @@ public class AutoGop : IChatable
 		}
 	}
 
-	private static void MoveCloseToZenoNpc()
+	public static bool IsWithinNpcInteractRange(Npc npc, int maxDx = 55, int maxDy = 50)
 	{
-		Npc npc = ModFunc.GetNpcByTempId(18);
-		if (npc != null && Char.myCharz() != null)
+		if (npc == null || Char.myCharz() == null)
 		{
-			if (System.Math.Abs(npc.cx - Char.myCharz().cx) > 40 || System.Math.Abs(npc.cy - Char.myCharz().cy) > 40)
-			{
-				Char.myCharz().cx = npc.cx + 20;
-				Char.myCharz().cy = npc.cy;
-				Service.gI().charMove();
-			}
-			Char.myCharz().npcFocus = npc;
+			return false;
 		}
+		return System.Math.Abs(npc.cx - Char.myCharz().cx) <= maxDx
+			&& System.Math.Abs(npc.cy - Char.myCharz().cy) <= maxDy;
+	}
+
+	private static void FocusNpcSafely(Npc npc)
+	{
+		if (npc == null || Char.myCharz() == null)
+		{
+			return;
+		}
+		Char.myCharz().FocusManualTo(npc);
+		Char.myCharz().npcFocus = npc;
+		Char.isManualFocus = true;
+	}
+
+	private static void MoveCloseToZenoNpcSmoothly(Npc npc)
+	{
+		if (npc == null || Char.myCharz() == null || IsWithinNpcInteractRange(npc, 55, 50))
+		{
+			return;
+		}
+		int offsetX = (Char.myCharz().cx > npc.cx) ? 20 : -20;
+		Char.myCharz().currentMovePoint = new MovePoint(npc.cx + offsetX, npc.cy);
 	}
 
 	public static string GetTabName(int tabId)
@@ -872,8 +1045,14 @@ public class AutoGop : IChatable
 		Item shopItem = FindShopItem(targetId);
 		if (shopItem == null)
 		{
-			string kw = (currentRunningTab == 1) ? "bánh" : "hồn";
-			shopItem = FindShopItemByName(kw);
+			if (currentRunningTab == 1)
+			{
+				shopItem = FindShopItemByName("bánh");
+			}
+			else
+			{
+				shopItem = FindShopItemByName("hồng ngọc") ?? FindShopItemByName("box");
+			}
 			if (shopItem != null && shopItem.template != null)
 			{
 				if (currentRunningTab == 1)
@@ -996,13 +1175,16 @@ public class AutoGop : IChatable
 					int specMaterial = (shopItem.iconSpec > 0) ? GetBagItemCountByIcon(shopItem.iconSpec) : 0;
 					if (hongNgoc < shopItem.buySpec && rubyCount < shopItem.buySpec && specMaterial < shopItem.buySpec)
 					{
-						// Nếu ở Tab Bánh và có chọn ĐK 3 (dùng hết bánh trong rương), kiểm tra xem trong rương còn bánh không
+						InvalidateBagCache();
+						// Nếu ở Tab Bánh và có chọn ĐK 3 (dùng 1 lần bánh trong rương), kiểm tra xem trong rương còn bánh không
 						if (stopBanhCond3 && GetBagItemCount(targetItemIdBanh) > 0)
 						{
 							isUsingAllBanh = true;
+							banhUseSent = false;
+							banhUseSentTimestamp = 0;
 							stepState = 5;
 							stateTimestamp = mSystem.currentTimeMillis();
-							Notify("Hết Hồng Ngọc/NL mua -> Tự dùng hết " + targetItemNameBanh + " trong rương...");
+							Notify("Hết Hồng Ngọc/NL mua -> Tự dùng " + targetItemNameBanh + " 1 lần...");
 							return;
 						}
 
@@ -1061,10 +1243,32 @@ public class AutoGop : IChatable
 		isRunningWorkflow = true;
 		completedWorkflowLoops = 0;
 		progressThisLoop = false;
+		transitionChainCount = 0;
+		pendingRouteTab = -1;
+		pendingRouteReason = string.Empty;
 		queueIndex = 0;
 		string loopDesc = (targetWorkflowLoops == 0) ? "Vô hạn" : (targetWorkflowLoops + " vòng");
 		Notify("▶ BẮT ĐẦU QUY TRÌNH AUTO GỘP (" + loopDesc + ")");
 		StartTab(workflowQueue[0]);
+	}
+
+	private void HandleMissingMapNpc(int tabId, int npcId, int expectedMapId)
+	{
+		StopAll("■ [WRONG_MAP] Tab " + GetTabName(tabId) + " yêu cầu đứng tại Map " + expectedMapId + " (NPC " + npcId + ") — hãy tự chuyển map!");
+	}
+
+	private void EndZenoError(ZenoEndCode code, string detail)
+	{
+		lastZenoEndCode = code;
+		lastZenoEndReason = detail;
+		zenoPendingTransaction = false;
+		zenoServerConfirmedSuccess = false;
+		zenoState = ZenoStepState.None;
+		InvalidateBagCache();
+		int curTickets = GetBagItemCount(1583);
+		long elapsed = (stateTimestamp > 0) ? (mSystem.currentTimeMillis() - stateTimestamp) : 0;
+		LogZenoEvent("EndError", code.ToString(), -1, -1, zenoTicketsBeforeBatch, curTickets, elapsed, detail);
+		StopAll("■ [" + code + "] " + detail);
 	}
 
 	public void StartTab(int tabId)
@@ -1075,12 +1279,19 @@ public class AutoGop : IChatable
 		stateTimestamp = mSystem.currentTimeMillis();
 		retryCount = 0;
 		npcRetryCount = 0;
-		isWaitingXmap = false;
-		xmapTargetMapId = -1;
-		xmapTargetNpcId = -1;
-		xmapPendingTab = 0;
-		xmapArrivedTimestamp = 0;
-		xmapStartTimestamp = 0;
+		pendingRouteTab = -1;
+		pendingRouteReason = string.Empty;
+
+		zenoState = ZenoStepState.None;
+		zenoPendingTransaction = false;
+		zenoTicketsBeforeBatch = -1;
+		zenoServerConfirmedSuccess = false;
+		zenoTalkPassCount = 0;
+		zenoMenu1ResyncCount = 0;
+		banhUseSent = false;
+		banhUseSentTimestamp = 0;
+		pendingDiemAck = false;
+		pendingDiemPick = -1;
 
 		if (hideUi)
 		{
@@ -1107,23 +1318,21 @@ public class AutoGop : IChatable
 		case 1:
 			completedBatchesBanh = 0;
 			isUsingAllBanh = false;
+			InvalidateBagCache();
 			if (stopBanhCond3 && GetBagItemCount(targetItemIdBanh) >= targetItemCountBanh)
 			{
 				isUsingAllBanh = true;
+				banhUseSent = false;
+				banhUseSentTimestamp = 0;
 				stepState = 5;
 				stateTimestamp = mSystem.currentTimeMillis();
-				Notify("▶ " + targetItemNameBanh + " đã đạt mốc " + targetItemCountBanh + " (ĐK 3) -> Tự dùng hết trong rương...");
+				Notify("▶ " + targetItemNameBanh + " đã đạt mốc " + targetItemCountBanh + " (ĐK 3) -> Tự dùng 1 lần...");
 				break;
 			}
-			if (ModFunc.GetNpcByTempId(92) == null && (zenoReturnMapId >= 0 || TileMap.mapID == 46))
+			if (ModFunc.GetNpcByTempId(92) == null)
 			{
-				int retMap1 = (zenoReturnMapId >= 0 && zenoReturnMapId != 46) ? zenoReturnMapId : 5;
-				if (TileMap.mapID != retMap1)
-				{
-					StartXmapToNpc(1, retMap1, 92);
-					Notify("▶ [Tab Bánh] Đang quay lại Map " + retMap1 + " gặp Goku (92)...");
-					return;
-				}
+				HandleMissingMapNpc(1, 92, 5);
+				return;
 			}
 			MoveCloseToNpc(92);
 			Notify("▶ Bắt đầu [Tab Bánh]: Mua " + targetItemNameBanh + " [" + targetItemIdBanh + "] tại Goku (92)");
@@ -1137,15 +1346,10 @@ public class AutoGop : IChatable
 			{
 				return;
 			}
-			if (ModFunc.GetNpcByTempId(56) == null && (zenoReturnMapId >= 0 || TileMap.mapID == 46))
+			if (ModFunc.GetNpcByTempId(56) == null)
 			{
-				int retMap2 = (zenoReturnMapId >= 0 && zenoReturnMapId != 46) ? zenoReturnMapId : 5;
-				if (TileMap.mapID != retMap2)
-				{
-					StartXmapToNpc(2, retMap2, 56);
-					Notify("▶ [Tab HN] Đang quay lại Map " + retMap2 + " gặp NPC 56...");
-					return;
-				}
+				HandleMissingMapNpc(2, 56, 5);
+				return;
 			}
 			MoveCloseToNpc(56);
 			Notify("▶ Bắt đầu [Tab HN]: Mua " + targetItemNameHn + " [" + targetItemIdHn + "] tại NPC 56");
@@ -1161,15 +1365,10 @@ public class AutoGop : IChatable
 				else if (currentDiemPoints >= RequiredPoints[1]) pointIndex = 1;
 				else if (currentDiemPoints >= RequiredPoints[2]) pointIndex = 2;
 			}
-			if (ModFunc.GetNpcByTempId(66) == null && (zenoReturnMapId >= 0 || TileMap.mapID == 46))
+			if (ModFunc.GetNpcByTempId(66) == null)
 			{
-				int retMap3 = (zenoReturnMapId >= 0 && zenoReturnMapId != 46) ? zenoReturnMapId : 5;
-				if (TileMap.mapID != retMap3)
-				{
-					StartXmapToNpc(3, retMap3, 66);
-					Notify("▶ [Tab Điểm] Đang quay lại Map " + retMap3 + " gặp Nồi Bánh (66)...");
-					return;
-				}
+				HandleMissingMapNpc(3, 66, 5);
+				return;
 			}
 			MoveCloseToNpc(66);
 			string mocStr = autoSelectMocDiem ? ("Tự động (" + MocShortNames[pointIndex] + ")") : MocShortNames[pointIndex];
@@ -1180,66 +1379,78 @@ public class AutoGop : IChatable
 
 		case 4:
 			completedBatchesZeno = 0;
-			zenoMenuStep = 0;
-			lastZenoMenu2Idx = 0;
+			lastZenoEndCode = ZenoEndCode.None;
+			lastZenoEndReason = string.Empty;
 			lastZenoDebug = "StartTab";
-			lastBagCheckTime = 0;
+			Npc karinNpc = ModFunc.GetNpcByTempId(18);
+			if (TileMap.mapID != 5 || karinNpc == null || karinNpc.statusMe == 15)
+			{
+				EndZenoError(ZenoEndCode.WRONG_MAP_ZENO, "Zeno yêu cầu đứng sẵn tại Tháp Karin (map 5), NPC 18 — hãy tự di chuyển sang Karin!");
+				return;
+			}
+			InvalidateBagCache();
 			int zenoCount = GetBagItemCount(1583);
 			if (zenoCount < batchQtyZeno)
 			{
+				lastZenoEndCode = ZenoEndCode.ZENO_LACK_TICKETS;
+				lastZenoEndReason = "Vé Zeno (" + zenoCount + ") < " + batchQtyZeno;
+				LogZenoEvent("PreCheck", "", -1, -1, zenoCount, zenoCount, 0, "ZENO_LACK_TICKETS");
 				FinishZenoLack("■ Vé Zeno (" + zenoCount + ") < " + batchQtyZeno);
 				return;
 			}
-			if (ModFunc.GetNpcByTempId(18) == null)
+			if (IsWithinNpcInteractRange(karinNpc, 55, 50))
 			{
-				if (TileMap.mapID != 46)
-				{
-					zenoReturnMapId = TileMap.mapID;
-					StartXmapToNpc(4, 46, 18);
-					Notify("▶ [Tab Zeno] Đang tự di chuyển tới Tháp Karin (Map 46)...");
-				}
-				else
-				{
-					StartXmapToNpc(4, 46, 18);
-					Notify("▶ [Tab Zeno] Đang chờ tải NPC Thần Mèo Karin (18)...");
-				}
-				return;
+				FocusNpcSafely(karinNpc);
+				Notify("▶ Bắt đầu [Tab Zeno]: Đổi " + batchQtyZeno + " Tiên Phù tại Karin (18)");
+				zenoState = ZenoStepState.WaitMenu1;
+				stepState = 2;
+				stateTimestamp = mSystem.currentTimeMillis();
+				LogZenoEvent("OpenMenu", "", -1, -1, zenoCount, zenoCount, 0, "Immediate openMenu(18)");
+				Service.gI().openMenu(18);
 			}
-			MoveCloseToZenoNpc();
-			Notify("▶ Bắt đầu [Tab Zeno]: Đổi " + batchQtyZeno + " Tiên Phù tại Karin (18)");
-			lastZenoDebug = "SentOpenMenu";
-			Service.gI().openMenu(18);
-			stepState = 2;
-			stateTimestamp = mSystem.currentTimeMillis();
+			else
+			{
+				Notify("▶ [Tab Zeno] Đang tiến tới gần Thần Mèo Karin (18)...");
+				zenoState = ZenoStepState.ApproachNpc;
+				stepState = 1;
+				stateTimestamp = mSystem.currentTimeMillis();
+				approachMoveIssuedMs = stateTimestamp;
+				LogZenoEvent("Approach", "", -1, -1, zenoCount, zenoCount, 0, "Moving to Karin");
+				MoveCloseToZenoNpcSmoothly(karinNpc);
+			}
 			break;
 		}
 	}
 
-	private void StartXmapToNpc(int tabId, int targetMapId, int npcId)
+	// === CÁC HÀM XỬ LÝ KẾT THÚC & RẼ NHÁNH TỪNG TAB (CHUYỂN TAB PHI ĐỆ QUY) ===
+	private void QueueTabTransition(int targetTab, string notifyMsg)
 	{
-		isWaitingXmap = true;
-		xmapTargetMapId = targetMapId;
-		xmapTargetNpcId = npcId;
-		xmapPendingTab = tabId;
-		xmapArrivedTimestamp = 0;
-		xmapStartTimestamp = mSystem.currentTimeMillis();
-		retryCount = 0;
-		stepState = 7;
-		stateTimestamp = xmapStartTimestamp;
-		if (TileMap.mapID != targetMapId)
+		if (transitionChainCount >= 8)
 		{
-			XmapController.FinishXmap();
-			XmapController.StartRunToMapId(targetMapId);
+			StopAll("■ Dừng an toàn: Phát hiện chuỗi chuyển hướng liên tiếp không tiến triển!");
+			return;
+		}
+		transitionChainCount++;
+		pendingRouteTab = targetTab;
+		pendingRouteReason = notifyMsg;
+		zenoState = (currentRunningTab == 4) ? ZenoStepState.Cooldown : ZenoStepState.None;
+		zenoPendingTransaction = false;
+		pendingDiemAck = false;
+		isUsingAllBanh = false;
+		banhUseSent = false;
+		stepState = 6;
+		stateTimestamp = mSystem.currentTimeMillis();
+		if (!string.IsNullOrEmpty(notifyMsg))
+		{
+			Notify(notifyMsg);
 		}
 	}
 
-	// === CÁC HÀM XỬ LÝ KẾT THÚC & RẼ NHÁNH TỪNG TAB ===
 	public void FinishTabBanh(string reason)
 	{
 		if (enableRoutingBanh && routeTargetTabBanh >= 1 && routeTargetTabBanh <= 4 && routeTargetTabBanh != 1)
 		{
-			Notify("Tab Bánh (" + reason + ") -> Chuyển sang Tab " + GetTabName(routeTargetTabBanh));
-			StartTab(routeTargetTabBanh);
+			QueueTabTransition(routeTargetTabBanh, "Tab Bánh (" + reason + ") -> Chuyển sang Tab " + GetTabName(routeTargetTabBanh));
 		}
 		else
 		{
@@ -1251,8 +1462,7 @@ public class AutoGop : IChatable
 	{
 		if (enableRoutingHn && routeTargetTabHn >= 1 && routeTargetTabHn <= 4 && routeTargetTabHn != 2)
 		{
-			Notify("Tab HN (" + reason + ") -> Chuyển sang Tab " + GetTabName(routeTargetTabHn));
-			StartTab(routeTargetTabHn);
+			QueueTabTransition(routeTargetTabHn, "Tab HN (" + reason + ") -> Chuyển sang Tab " + GetTabName(routeTargetTabHn));
 		}
 		else
 		{
@@ -1264,8 +1474,7 @@ public class AutoGop : IChatable
 	{
 		if (enableRoutingDiem && routeTargetTabDiem >= 1 && routeTargetTabDiem <= 4 && routeTargetTabDiem != 3)
 		{
-			Notify("Tab Điểm (" + reason + ") -> Chuyển sang Tab " + GetTabName(routeTargetTabDiem));
-			StartTab(routeTargetTabDiem);
+			QueueTabTransition(routeTargetTabDiem, "Tab Điểm (" + reason + ") -> Chuyển sang Tab " + GetTabName(routeTargetTabDiem));
 		}
 		else
 		{
@@ -1275,10 +1484,11 @@ public class AutoGop : IChatable
 
 	public void FinishZenoDone(string reason)
 	{
+		lastZenoEndCode = ZenoEndCode.ZENO_DONE;
+		lastZenoEndReason = reason;
 		if (enableRouteDoneZeno && routeTargetWhenDoneZeno >= 1 && routeTargetWhenDoneZeno <= 4 && routeTargetWhenDoneZeno != 4)
 		{
-			Notify("▶ Zeno đạt mục tiêu -> Chuyển sang Tab " + GetTabName(routeTargetWhenDoneZeno));
-			StartTab(routeTargetWhenDoneZeno);
+			QueueTabTransition(routeTargetWhenDoneZeno, "▶ Zeno đạt mục tiêu -> Chuyển sang Tab " + GetTabName(routeTargetWhenDoneZeno));
 		}
 		else
 		{
@@ -1288,10 +1498,11 @@ public class AutoGop : IChatable
 
 	public void FinishZenoLack(string reason)
 	{
+		lastZenoEndCode = ZenoEndCode.ZENO_LACK_TICKETS;
+		lastZenoEndReason = reason;
 		if (enableRouteLackZeno && routeTargetWhenLackZeno >= 1 && routeTargetWhenLackZeno <= 4 && routeTargetWhenLackZeno != 4)
 		{
-			Notify((reason.StartsWith("■") ? reason : ("■ " + reason)) + " -> Chuyển sang Tab " + GetTabName(routeTargetWhenLackZeno));
-			StartTab(routeTargetWhenLackZeno);
+			QueueTabTransition(routeTargetWhenLackZeno, (reason.StartsWith("■") ? reason : ("■ " + reason)) + " -> Chuyển sang Tab " + GetTabName(routeTargetWhenLackZeno));
 		}
 		else
 		{
@@ -1322,9 +1533,7 @@ public class AutoGop : IChatable
 		if (queueIndex < workflowQueue.Count)
 		{
 			int nextTab = workflowQueue[queueIndex];
-			Notify("Chờ " + delayBetweenTabsMs + "ms -> Chuyển sang Tab " + GetTabName(nextTab));
-			stepState = 6; // Chờ delay chuyển giao
-			stateTimestamp = mSystem.currentTimeMillis();
+			QueueTabTransition(nextTab, "Chờ " + delayBetweenTabsMs + "ms -> Chuyển sang Tab " + GetTabName(nextTab));
 		}
 		else
 		{
@@ -1341,9 +1550,7 @@ public class AutoGop : IChatable
 				string loopInfo = (targetWorkflowLoops == 0)
 					? (completedWorkflowLoops + "/∞")
 					: (completedWorkflowLoops + "/" + targetWorkflowLoops);
-				Notify("Xong vòng " + loopInfo + " -> Lặp lại từ Tab " + GetTabName(workflowQueue[0]));
-				stepState = 6;
-				stateTimestamp = mSystem.currentTimeMillis();
+				QueueTabTransition(workflowQueue[0], "Xong vòng " + loopInfo + " -> Lặp lại từ Tab " + GetTabName(workflowQueue[0]));
 			}
 			else
 			{
@@ -1359,22 +1566,22 @@ public class AutoGop : IChatable
 		currentRunningTab = 0;
 		stepState = 0;
 		isUsingAllBanh = false;
+		banhUseSent = false;
+		banhUseSentTimestamp = 0;
+		pendingDiemAck = false;
+		pendingDiemPick = -1;
+		pendingRouteTab = -1;
+		pendingRouteReason = string.Empty;
+		transitionChainCount = 0;
 		retryCount = 0;
 		npcRetryCount = 0;
-		zenoMenuStep = 0;
-		lastZenoMenu2Idx = 0;
-		isWaitingXmap = false;
-		xmapTargetMapId = -1;
-		xmapTargetNpcId = -1;
-		xmapPendingTab = 0;
-		xmapArrivedTimestamp = 0;
-		xmapStartTimestamp = 0;
-		zenoReturnMapId = -1;
+		zenoState = ZenoStepState.None;
+		zenoPendingTransaction = false;
+		zenoTicketsBeforeBatch = -1;
+		zenoServerConfirmedSuccess = false;
+		zenoTalkPassCount = 0;
+		zenoMenu1ResyncCount = 0;
 		lastZenoDebug = string.Empty;
-		if (AutoXmap.IsXmapRunning)
-		{
-			XmapController.FinishXmap();
-		}
 		lastStopTimeMs = mSystem.currentTimeMillis();
 		if (hideUi)
 		{
@@ -1462,6 +1669,232 @@ public class AutoGop : IChatable
 		}
 	}
 
+	private void ConfirmDiemBatchSuccess(string source)
+	{
+		if (!pendingDiemAck)
+		{
+			return;
+		}
+		int pick = (pendingDiemPick >= 0 && pendingDiemPick < RequiredPoints.Length) ? pendingDiemPick : pointIndex;
+		pendingDiemAck = false;
+		pendingDiemPick = -1;
+		completedBatchesDiem++;
+		progressThisLoop = true;
+		transitionChainCount = 0;
+		if (currentDiemPoints >= RequiredPoints[pick])
+		{
+			currentDiemPoints -= RequiredPoints[pick];
+		}
+
+		// Đánh giá lại mốc tự động chỉ khi autoSelectMocDiem đang bật
+		if (autoSelectMocDiem && currentDiemPoints >= 0)
+		{
+			if (currentDiemPoints >= RequiredPoints[0]) pointIndex = 0;
+			else if (currentDiemPoints >= RequiredPoints[1]) pointIndex = 1;
+			else if (currentDiemPoints >= RequiredPoints[2]) pointIndex = 2;
+		}
+
+		int nextMinRequired = autoSelectMocDiem ? RequiredPoints[2] : RequiredPoints[pointIndex];
+		Notify("▶ Xác nhận đổi Điểm (" + MocShortNames[pick] + ") lượt " + completedBatchesDiem + " [" + source + "]");
+
+		if (stopConditionDiem == 1 && targetBatchesDiem > 0 && completedBatchesDiem >= targetBatchesDiem)
+		{
+			FinishTabDiem("Đã đổi đủ " + completedBatchesDiem + " lượt (" + MocShortNames[pick] + ")");
+		}
+		else if (stopConditionDiem == 2 && currentDiemPoints >= 0 && currentDiemPoints < nextMinRequired)
+		{
+			string reqName = autoSelectMocDiem ? "3.000đ" : MocFullNames[pointIndex];
+			FinishTabDiem("Hết điểm đổi (" + NinjaUtil.getMoneys(currentDiemPoints) + " < " + reqName + ")");
+		}
+		else
+		{
+			stepState = 5;
+			stateTimestamp = mSystem.currentTimeMillis();
+		}
+	}
+
+	private void CompleteBanhUsePhase(string reason)
+	{
+		isUsingAllBanh = false;
+		banhUseSent = false;
+		banhUseSentTimestamp = 0;
+		FinishTabBanh(reason);
+	}
+
+	private void CheckZenoAckConfirmation()
+	{
+		if (!isRunning || currentRunningTab != 4 || zenoState != ZenoStepState.WaitServerAck || !zenoPendingTransaction)
+		{
+			return;
+		}
+		InvalidateBagCache();
+		int ticketsAfter = GetBagItemCount(1583);
+		bool ticketDroppedFull = zenoTicketsBeforeBatch >= 0 && ticketsAfter <= zenoTicketsBeforeBatch - batchQtyZeno;
+		bool ticketDroppedWithConfirm = zenoServerConfirmedSuccess && zenoTicketsBeforeBatch >= 0 && ticketsAfter < zenoTicketsBeforeBatch;
+		if (ticketDroppedFull || ticketDroppedWithConfirm)
+		{
+			CompleteZenoBatchSuccess(ticketsAfter);
+		}
+	}
+
+	private void CompleteZenoBatchSuccess(int ticketsAfter)
+	{
+		if (!zenoPendingTransaction)
+		{
+			return;
+		}
+		zenoPendingTransaction = false;
+		zenoServerConfirmedSuccess = false;
+		retryCount = 0;
+		npcRetryCount = 0;
+		completedBatchesZeno++;
+		progressThisLoop = true;
+		transitionChainCount = 0;
+		long elapsed = (stateTimestamp > 0) ? (mSystem.currentTimeMillis() - stateTimestamp) : 0;
+		LogZenoEvent("AckSuccess", "Tiên Phù Zeno", zenoMenu2CmdIdx, zenoMenu2CmdSubIdx, zenoTicketsBeforeBatch, ticketsAfter, elapsed, "ZENO_BATCH_" + completedBatchesZeno);
+		Notify("▶ Đổi thành công " + batchQtyZeno + " Tiên Phù Zeno (Đợt " + completedBatchesZeno + ", Vé còn: " + ticketsAfter + ")");
+
+		if (targetBatchesZeno > 0 && completedBatchesZeno >= targetBatchesZeno)
+		{
+			lastZenoEndCode = ZenoEndCode.ZENO_DONE;
+			lastZenoEndReason = "Đã đổi đủ " + completedBatchesZeno + " đợt Zeno";
+			zenoState = ZenoStepState.None;
+			FinishZenoDone("▶ Đã đổi đủ " + completedBatchesZeno + " đợt Zeno");
+		}
+		else if (ticketsAfter < batchQtyZeno)
+		{
+			lastZenoEndCode = ZenoEndCode.ZENO_LACK_TICKETS;
+			lastZenoEndReason = "Vé Zeno (" + ticketsAfter + ") < " + batchQtyZeno;
+			zenoState = ZenoStepState.None;
+			FinishZenoLack("■ Vé Zeno (" + ticketsAfter + ") < " + batchQtyZeno);
+		}
+		else
+		{
+			zenoState = ZenoStepState.Cooldown;
+			stepState = 5;
+			stateTimestamp = mSystem.currentTimeMillis();
+		}
+	}
+
+	public void OnReceiveMenuChat(int npcId, string chatText)
+	{
+		if (!isRunning || currentRunningTab != 4 || npcId != 18 || string.IsNullOrEmpty(chatText))
+		{
+			return;
+		}
+		string lower = chatText.ToLower();
+		if (lower.Contains("hết vé") || lower.Contains("không đủ") || lower.Contains("còn thiếu") || lower.Contains("hành trang đã đầy") || lower.Contains("hành trang đầy") || lower.Contains("rương đã đầy") || lower.Contains("thất bại") || lower.Contains("không thể đổi"))
+		{
+			LogZenoEvent("MenuChat32", chatText, -1, -1, zenoTicketsBeforeBatch, GetBagItemCount(1583), 0, "Case32ErrorText");
+			OnServerInfo(chatText);
+		}
+	}
+
+	private bool ResolveZenoMenuStep(IList<string> norm, string packetName, out int chosenFlatIdx, out bool isTalkPass, out ZenoStepState stepUsed)
+	{
+		chosenFlatIdx = -1;
+		isTalkPass = false;
+		stepUsed = zenoState;
+		long elapsed = (stateTimestamp > 0) ? (mSystem.currentTimeMillis() - stateTimestamp) : 0;
+		int curTickets = GetBagItemCount(1583);
+
+		if (zenoState == ZenoStepState.WaitMenu2)
+		{
+			int tier2Idx = FindZenoMenuMatch(norm, ZenoStepState.WaitMenu2);
+			if (tier2Idx >= 0)
+			{
+				chosenFlatIdx = tier2Idx;
+				stepUsed = ZenoStepState.WaitMenu2;
+				return true;
+			}
+			if (IsZenoMainMenu(norm))
+			{
+				if (zenoMenu1ResyncCount < 1)
+				{
+					zenoMenu1ResyncCount++;
+					LogZenoEvent(packetName, JoinCaptions(norm), -1, -1, zenoTicketsBeforeBatch, curTickets, elapsed, "Resync WaitMenu2->WaitMenu1");
+					zenoState = ZenoStepState.WaitMenu1;
+				}
+				else
+				{
+					LogZenoEvent(packetName, JoinCaptions(norm), -1, -1, zenoTicketsBeforeBatch, curTickets, elapsed, "MENU_LOOP");
+					EndZenoError(ZenoEndCode.ZENO_MENU_ERROR, "MENU_LOOP: Lặp lại Menu chính NPC 18 (" + packetName + ") " + JoinCaptions(norm));
+					return false;
+				}
+			}
+			else
+			{
+				LogZenoEvent(packetName, JoinCaptions(norm), -1, -1, zenoTicketsBeforeBatch, curTickets, elapsed, "MENU_NOT_MATCHED_STEP2");
+				EndZenoError(ZenoEndCode.ZENO_MENU_ERROR, "MENU_NOT_MATCHED (" + packetName + ", WaitMenu2): " + JoinCaptions(norm));
+				return false;
+			}
+		}
+
+		if (zenoState == ZenoStepState.WaitMenu1)
+		{
+			int tier1Idx = FindZenoMenuMatch(norm, ZenoStepState.WaitMenu1);
+			if (tier1Idx >= 0)
+			{
+				chosenFlatIdx = tier1Idx;
+				stepUsed = ZenoStepState.WaitMenu1;
+				return true;
+			}
+			int talkIdx = FindZenoTalkOptionIndex(norm);
+			if (talkIdx >= 0 && zenoTalkPassCount < 2)
+			{
+				zenoTalkPassCount++;
+				chosenFlatIdx = talkIdx;
+				isTalkPass = true;
+				stepUsed = ZenoStepState.WaitMenu1;
+				return true;
+			}
+			LogZenoEvent(packetName, JoinCaptions(norm), -1, -1, zenoTicketsBeforeBatch, curTickets, elapsed, "MENU_NOT_MATCHED_STEP1");
+			EndZenoError(ZenoEndCode.ZENO_MENU_ERROR, "MENU_NOT_MATCHED (" + packetName + ", WaitMenu1): " + JoinCaptions(norm));
+			return false;
+		}
+
+		return false;
+	}
+
+	private static int ResolveZenoInputFieldIndex(string title, string[] fieldNames, sbyte[] fieldTypes)
+	{
+		if (fieldNames == null || fieldTypes == null || fieldNames.Length == 0)
+		{
+			return -1;
+		}
+		for (int i = 0; i < fieldNames.Length; i++)
+		{
+			if (fieldTypes[i] == 2)
+			{
+				continue;
+			}
+			string fn = NormalizeMenuText(fieldNames[i]);
+			if (fn.Contains("số lượng") || fn.Contains("so luong") || fn.Contains("nhập số") || fn.Contains("vé") || fn.Contains("zeno") || fn.Contains("tiên phù"))
+			{
+				return i;
+			}
+		}
+		if (fieldNames.Length == 1 && fieldTypes[0] != 2)
+		{
+			return 0;
+		}
+		int numericIdx = -1;
+		int numericCount = 0;
+		for (int i = 0; i < fieldTypes.Length; i++)
+		{
+			if (fieldTypes[i] == 0)
+			{
+				numericIdx = i;
+				numericCount++;
+			}
+		}
+		if (numericCount == 1)
+		{
+			return numericIdx;
+		}
+		return -1;
+	}
+
 	public bool OnReceiveMenu(string[] menu, Npc npc, string chatText = "")
 	{
 		if (npc == null || npc.template == null || menu == null)
@@ -1475,6 +1908,10 @@ public class AutoGop : IChatable
 		if (npcTempId == 66 && !string.IsNullOrEmpty(chatText))
 		{
 			ParseDiemPoints(chatText, npcTempId, menu);
+		}
+		if (npcTempId == 18 && !string.IsNullOrEmpty(chatText))
+		{
+			OnReceiveMenuChat(18, chatText);
 		}
 
 		if (!isRunning)
@@ -1525,6 +1962,10 @@ public class AutoGop : IChatable
 		// === TAB 3: ĐIỂM (NPC 66) ===
 		if (currentRunningTab == 3 && npcTempId == 66)
 		{
+			if (pendingDiemAck)
+			{
+				return hideUi;
+			}
 			bool isMenu1 = false;
 			for (int k = 0; k < menu.Length; k++)
 			{
@@ -1535,7 +1976,7 @@ public class AutoGop : IChatable
 				}
 			}
 
-			// Tự động chọn mốc từ cao xuống thấp (10Tr -> 5K -> 3K)
+			// Tự động chọn mốc từ cao xuống thấp chỉ khi autoSelectMocDiem bật
 			if (autoSelectMocDiem && currentDiemPoints >= 0)
 			{
 				if (currentDiemPoints >= RequiredPoints[0])
@@ -1571,39 +2012,17 @@ public class AutoGop : IChatable
 			}
 			else
 			{
-				int pick = (pointIndex >= 0 && pointIndex < menu.Length) ? pointIndex : 1;
-				completedBatchesDiem++;
-				progressThisLoop = true;
-				if (currentDiemPoints >= RequiredPoints[pick])
-				{
-					currentDiemPoints -= RequiredPoints[pick];
-				}
+				int pick = (pointIndex >= 0 && pointIndex < menu.Length && pointIndex < RequiredPoints.Length) ? pointIndex : 1;
+				InvalidateBagCache();
+				diemBagUnitsSnapshot = GetTotalBagItemUnits();
+				diemBagSlotsSnapshot = GetEmptyBagSlots();
+				pendingDiemAck = true;
+				pendingDiemPick = pick;
+				diemAckTimestamp = mSystem.currentTimeMillis();
+				stepState = 5;
+				stateTimestamp = diemAckTimestamp;
+				Notify("▶ Đã gửi lệnh đổi Điểm mốc " + MocShortNames[pick] + ", đang chờ server xác nhận...");
 				Service.gI().confirmMenu(66, (sbyte)pick);
-
-				// Đánh giá lại mốc tự động sau khi trừ điểm
-				if (autoSelectMocDiem && currentDiemPoints >= 0)
-				{
-					if (currentDiemPoints >= RequiredPoints[0]) pointIndex = 0;
-					else if (currentDiemPoints >= RequiredPoints[1]) pointIndex = 1;
-					else if (currentDiemPoints >= RequiredPoints[2]) pointIndex = 2;
-				}
-
-				int nextMinRequired = autoSelectMocDiem ? RequiredPoints[2] : RequiredPoints[pointIndex];
-
-				if (stopConditionDiem == 1 && targetBatchesDiem > 0 && completedBatchesDiem >= targetBatchesDiem)
-				{
-					FinishTabDiem("Đã đổi đủ " + completedBatchesDiem + " lượt (" + MocShortNames[pick] + ")");
-				}
-				else if (stopConditionDiem == 2 && currentDiemPoints >= 0 && currentDiemPoints < nextMinRequired)
-				{
-					string reqName = autoSelectMocDiem ? "3.000đ" : MocFullNames[pointIndex];
-					FinishTabDiem("Hết điểm đổi (" + NinjaUtil.getMoneys(currentDiemPoints) + " < " + reqName + ")");
-				}
-				else
-				{
-					stepState = 5;
-					stateTimestamp = mSystem.currentTimeMillis();
-				}
 				return hideUi;
 			}
 		}
@@ -1611,27 +2030,31 @@ public class AutoGop : IChatable
 		// === TAB 4: ZENO (NPC 18) ===
 		if (currentRunningTab == 4 && npcTempId == 18)
 		{
-			if (isWaitingXmap || stepState == 7)
+			if (zenoState != ZenoStepState.WaitMenu1 && zenoState != ZenoStepState.WaitMenu2)
 			{
+				LogZenoEvent("pkt32", "ignored", -1, -1, zenoTicketsBeforeBatch, GetBagItemCount(1583), 0, "ignore pkt 32 in state " + zenoState);
 				return false;
-			}
-			if (stepState == 5 || stepState == 6 || stepState == 7)
-			{
-				return hideUi;
 			}
 			string[] norm = new string[menu.Length];
 			for (int l = 0; l < menu.Length; l++)
 			{
 				norm[l] = NormalizeMenuText(menu[l]);
 			}
-			MaybeResetZenoMenuStepIfMainMenu(norm);
-			int chosenIdx = FindZenoMenuOptionIndex(norm, zenoMenuStep);
-			if (chosenIdx < 0)
+			if (!ResolveZenoMenuStep(norm, "pkt32", out int chosenIdx, out bool isTalkPass, out ZenoStepState stepUsed))
 			{
-				chosenIdx = 0;
+				return hideUi;
 			}
-			lastZenoDebug = "s=" + zenoMenuStep + ",i=" + chosenIdx + ",t=32,n=" + norm.Length + ",m0=" + (norm.Length > 0 ? norm[0] : "");
-			AdvanceZenoMenuStep(chosenIdx, 32, 0, 0);
+			long elapsed = (stateTimestamp > 0) ? (mSystem.currentTimeMillis() - stateTimestamp) : 0;
+			int ticketsNow = GetBagItemCount(1583);
+			if (isTalkPass)
+			{
+				stateTimestamp = mSystem.currentTimeMillis();
+				LogZenoEvent("pkt32", norm[chosenIdx], chosenIdx, 0, zenoTicketsBeforeBatch, ticketsNow, elapsed, "TalkPass");
+				Service.gI().confirmMenu(18, (sbyte)chosenIdx);
+				return hideUi;
+			}
+			RecordZenoMenuSelection(stepUsed, 32, chosenIdx, 0, 0);
+			LogZenoEvent("pkt32", norm[chosenIdx], chosenIdx, 0, zenoTicketsBeforeBatch, ticketsNow, elapsed, stepUsed + "->" + zenoState);
 			Service.gI().confirmMenu(18, (sbyte)chosenIdx);
 			return hideUi;
 		}
@@ -1650,7 +2073,7 @@ public class AutoGop : IChatable
 		{
 			return false;
 		}
-		if (isWaitingXmap || stepState == 7)
+		if (zenoState != ZenoStepState.WaitMenu1 && zenoState != ZenoStepState.WaitMenu2)
 		{
 			return false;
 		}
@@ -1659,13 +2082,9 @@ public class AutoGop : IChatable
 		{
 			focus = ModFunc.GetNpcByTempId(18);
 		}
-		if (focus != null && focus.template != null && focus.template.npcTemplateId != 18)
+		if (focus == null || focus.template == null || focus.template.npcTemplateId != 18)
 		{
 			return false;
-		}
-		if (stepState == 5 || stepState == 6 || stepState == 7)
-		{
-			return hideUi;
 		}
 		List<string> normList = new List<string>();
 		List<int> menuIdxList = new List<int>();
@@ -1686,6 +2105,12 @@ public class AutoGop : IChatable
 					subIdxList.Add(k - 1);
 				}
 			}
+			else if (cmd.idAction == 88821 && cmd.p is int parentIdx)
+			{
+				normList.Add(NormalizeMenuText(cmd.caption));
+				menuIdxList.Add(parentIdx);
+				subIdxList.Add(i);
+			}
 			else
 			{
 				normList.Add(NormalizeMenuText(cmd.caption));
@@ -1697,16 +2122,23 @@ public class AutoGop : IChatable
 		{
 			return false;
 		}
-		MaybeResetZenoMenuStepIfMainMenu(normList);
-		int flatIdx = FindZenoMenuOptionIndex(normList.ToArray(), zenoMenuStep);
-		if (flatIdx < 0)
+		if (!ResolveZenoMenuStep(normList, "pkt33", out int flatIdx, out bool isTalkPass, out ZenoStepState stepUsed))
 		{
-			flatIdx = 0;
+			return hideUi;
 		}
 		int chosenMenuIdx = menuIdxList[flatIdx];
 		int chosenSubIdx = subIdxList[flatIdx];
-		lastZenoDebug = "s=" + zenoMenuStep + ",i=" + chosenMenuIdx + "/" + chosenSubIdx + ",t=33,n=" + normList.Count + ",m0=" + normList[0];
-		AdvanceZenoMenuStep(chosenMenuIdx, 33, chosenSubIdx, 0);
+		long elapsed = (stateTimestamp > 0) ? (mSystem.currentTimeMillis() - stateTimestamp) : 0;
+		int ticketsNow = GetBagItemCount(1583);
+		if (isTalkPass)
+		{
+			stateTimestamp = mSystem.currentTimeMillis();
+			LogZenoEvent("pkt33", normList[flatIdx], chosenMenuIdx, chosenSubIdx, zenoTicketsBeforeBatch, ticketsNow, elapsed, "TalkPass");
+			Service.gI().menu(18, chosenMenuIdx, chosenSubIdx);
+			return hideUi;
+		}
+		RecordZenoMenuSelection(stepUsed, 33, chosenMenuIdx, chosenSubIdx, 0);
+		LogZenoEvent("pkt33", normList[flatIdx], chosenMenuIdx, chosenSubIdx, zenoTicketsBeforeBatch, ticketsNow, elapsed, stepUsed + "->" + zenoState);
 		Service.gI().menu(18, chosenMenuIdx, chosenSubIdx);
 		return hideUi;
 	}
@@ -1717,13 +2149,18 @@ public class AutoGop : IChatable
 		{
 			return false;
 		}
-		if (isWaitingXmap || stepState == 7)
+		if (zenoState != ZenoStepState.WaitMenu1 && zenoState != ZenoStepState.WaitMenu2)
 		{
 			return false;
 		}
-		if (stepState == 5 || stepState == 6 || stepState == 7)
+		Npc focus = (Char.myCharz() != null) ? Char.myCharz().npcFocus : null;
+		if (focus == null)
 		{
-			return hideUi;
+			focus = ModFunc.GetNpcByTempId(18);
+		}
+		if (focus != null && focus.template != null && focus.template.npcTemplateId != 18)
+		{
+			return false;
 		}
 		string[] norm = new string[menuCmds.size()];
 		short[] menuIds = new short[menuCmds.size()];
@@ -1733,15 +2170,22 @@ public class AutoGop : IChatable
 			norm[i] = (cmd != null) ? NormalizeMenuText(cmd.caption) : "";
 			menuIds[i] = (cmd != null && cmd.p is short idVal) ? idVal : (short)0;
 		}
-		MaybeResetZenoMenuStepIfMainMenu(norm);
-		int flatIdx = FindZenoMenuOptionIndex(norm, zenoMenuStep);
-		if (flatIdx < 0)
+		if (!ResolveZenoMenuStep(norm, "pkt27", out int flatIdx, out bool isTalkPass, out ZenoStepState stepUsed))
 		{
-			flatIdx = 0;
+			return hideUi;
 		}
 		short targetMenuId = menuIds[flatIdx];
-		lastZenoDebug = "s=" + zenoMenuStep + ",i=" + flatIdx + ",t=27,id=" + targetMenuId + ",n=" + norm.Length + ",m0=" + (norm.Length > 0 ? norm[0] : "");
-		AdvanceZenoMenuStep(flatIdx, 27, 0, targetMenuId);
+		long elapsed = (stateTimestamp > 0) ? (mSystem.currentTimeMillis() - stateTimestamp) : 0;
+		int ticketsNow = GetBagItemCount(1583);
+		if (isTalkPass)
+		{
+			stateTimestamp = mSystem.currentTimeMillis();
+			LogZenoEvent("pkt27", norm[flatIdx], flatIdx, targetMenuId, zenoTicketsBeforeBatch, ticketsNow, elapsed, "TalkPass");
+			Service.gI().menuId(targetMenuId);
+			return hideUi;
+		}
+		RecordZenoMenuSelection(stepUsed, 27, flatIdx, 0, targetMenuId);
+		LogZenoEvent("pkt27", norm[flatIdx], flatIdx, targetMenuId, zenoTicketsBeforeBatch, ticketsNow, elapsed, stepUsed + "->" + zenoState);
 		Service.gI().menuId(targetMenuId);
 		return hideUi;
 	}
@@ -1752,60 +2196,130 @@ public class AutoGop : IChatable
 		{
 			return false;
 		}
+		if (currentRunningTab != 1 && currentRunningTab != 2 && currentRunningTab != 4)
+		{
+			return false;
+		}
+		if (currentRunningTab == 4 && (zenoState != ZenoStepState.WaitInput || zenoPendingTransaction))
+		{
+			LogZenoEvent("-125", "", -1, -1, zenoTicketsBeforeBatch, GetBagItemCount(1583), 0, "IGNORE_125: state=" + zenoState + ", pending=" + zenoPendingTransaction);
+			return false;
+		}
 
 		npcRetryCount = 0;
 
-		// Gói -125 ClientInput khi Mua Bánh (1), Mua HN (2), hoặc Đổi Zeno (4)
-		if (currentRunningTab == 1 || currentRunningTab == 2 || currentRunningTab == 4)
+		// Gói -125 ClientInput khi Mua Bánh (1), Mua BOX HN SSS (2), hoặc Đổi Zeno (4)
+		try
 		{
-			try
+			ChatTextField.gI().isShow = false;
+			string title = msg.reader().readUTF();
+			sbyte nFields = msg.reader().readByte();
+			if (nFields <= 0 || nFields > 20)
 			{
-				ChatTextField.gI().isShow = false;
-				string title = msg.reader().readUTF();
-				sbyte nFields = msg.reader().readByte();
-				for (int i = 0; i < nFields; i++)
-				{
-					msg.reader().readUTF();
-					msg.reader().readByte();
-				}
-
-				int qtyToSend = 1000;
-				if (currentRunningTab == 1) qtyToSend = batchQtyBanh;
-				else if (currentRunningTab == 2) qtyToSend = batchQtyHn;
-				else if (currentRunningTab == 4) qtyToSend = batchQtyZeno;
-
 				if (currentRunningTab == 4)
 				{
-					int fieldCount = System.Math.Max(1, (int)nFields);
-					TField[] fields = new TField[fieldCount];
-					for (int i = 0; i < fieldCount; i++)
-					{
-						fields[i] = new TField();
-						fields[i].setText(qtyToSend.ToString());
-					}
-					Service.gI().sendClientInput(fields);
+					EndZenoError(ZenoEndCode.ZENO_MENU_ERROR, "INVALID_125_FIELDS: nFields=" + nFields);
 				}
-				else
+				return true;
+			}
+			string[] fieldNames = new string[nFields];
+			sbyte[] fieldTypes = new sbyte[nFields];
+			for (int i = 0; i < nFields; i++)
+			{
+				fieldNames[i] = msg.reader().readUTF();
+				fieldTypes[i] = msg.reader().readByte();
+			}
+
+			int qtyToSend = 1000;
+			if (currentRunningTab == 1) qtyToSend = batchQtyBanh;
+			else if (currentRunningTab == 2) qtyToSend = batchQtyHn;
+			else if (currentRunningTab == 4) qtyToSend = batchQtyZeno;
+
+			if (currentRunningTab == 4)
+			{
+				int targetIdx = ResolveZenoInputFieldIndex(title, fieldNames, fieldTypes);
+				if (targetIdx < 0)
 				{
-					SendClientInputDirect(qtyToSend.ToString());
+					EndZenoError(ZenoEndCode.ZENO_MENU_ERROR, "INPUT_SCHEMA_UNKNOWN: title=" + title + ", fields=" + JoinCaptions(fieldNames));
+					return true;
 				}
+				InvalidateBagCache();
+				int ticketsBefore = GetBagItemCount(1583);
+				if (ticketsBefore < batchQtyZeno)
+				{
+					lastZenoEndCode = ZenoEndCode.ZENO_LACK_TICKETS;
+					lastZenoEndReason = "Vé Zeno (" + ticketsBefore + ") < " + batchQtyZeno;
+					zenoState = ZenoStepState.None;
+					LogZenoEvent("-125", title, targetIdx, nFields, ticketsBefore, ticketsBefore, 0, "LACK_BEFORE_SEND_125");
+					FinishZenoLack("■ Vé Zeno (" + ticketsBefore + ") < " + batchQtyZeno);
+					return true;
+				}
+
+				TField[] fields = new TField[nFields];
+				for (int i = 0; i < nFields; i++)
+				{
+					fields[i] = new TField();
+					fields[i].name = fieldNames[i];
+					if (fieldTypes[i] == 0) fields[i].setIputType(TField.INPUT_TYPE_NUMERIC);
+					else if (fieldTypes[i] == 1) fields[i].setIputType(TField.INPUT_TYPE_ANY);
+					else if (fieldTypes[i] == 2) fields[i].setIputType(TField.INPUT_TYPE_PASSWORD);
+					fields[i].setText((i == targetIdx) ? qtyToSend.ToString() : string.Empty);
+				}
+
+				if (!hideUi)
+				{
+					try
+					{
+						ClientInput.gI().setInput(nFields, title);
+						for (int i = 0; i < nFields; i++)
+						{
+							if (ClientInput.gI().tf != null && i < ClientInput.gI().tf.Length)
+							{
+								ClientInput.gI().tf[i].name = fieldNames[i];
+								if (fieldTypes[i] == 0) ClientInput.gI().tf[i].setIputType(TField.INPUT_TYPE_NUMERIC);
+								else if (fieldTypes[i] == 1) ClientInput.gI().tf[i].setIputType(TField.INPUT_TYPE_ANY);
+								else if (fieldTypes[i] == 2) ClientInput.gI().tf[i].setIputType(TField.INPUT_TYPE_PASSWORD);
+								ClientInput.gI().tf[i].setText(fields[i].getText());
+							}
+						}
+					}
+					catch
+					{
+					}
+				}
+
+				zenoTicketsBeforeBatch = ticketsBefore;
+				zenoPendingTransaction = true;
+				zenoServerConfirmedSuccess = false;
+				retryCount = 0;
+				npcRetryCount = 0;
+				long elapsed = (stateTimestamp > 0) ? (mSystem.currentTimeMillis() - stateTimestamp) : 0;
+				zenoState = ZenoStepState.WaitServerAck;
+				stepState = 4;
+				stateTimestamp = mSystem.currentTimeMillis();
+				LogZenoEvent("-125", title, targetIdx, nFields, ticketsBefore, ticketsBefore, elapsed, "SendQty=" + qtyToSend + ", WaitServerAck");
+				Service.gI().sendClientInput(fields);
+				return true;
+			}
+			else
+			{
+				SendClientInputDirect(qtyToSend.ToString());
 				progressThisLoop = true;
 
 				if (currentRunningTab == 1)
 				{
 					completedBatchesBanh++;
 					retryCount = 0;
-					// ĐK 3: Số bánh trong rương đạt mốc -> Tự dùng hết bánh trong rương
+					InvalidateBagCache();
+					// ĐK 3: Số bánh trong rương đạt mốc -> Tự dùng 1 lần
 					if (stopBanhCond3 && GetBagItemCount(targetItemIdBanh) >= targetItemCountBanh)
 					{
 						isUsingAllBanh = true;
+						banhUseSent = false;
+						banhUseSentTimestamp = 0;
 						stepState = 5;
 						stateTimestamp = mSystem.currentTimeMillis();
-						Notify(targetItemNameBanh + " đạt mốc " + targetItemCountBanh + " (ĐK 3) -> Tự dùng hết trong rương...");
-					}
-					else if (stopBanhCond1 && targetBatchesBanh > 0 && completedBatchesBanh >= targetBatchesBanh)
-					{
-						FinishTabBanh("Đã mua đủ " + completedBatchesBanh + " đợt " + targetItemNameBanh + " (ĐK 1)");
+						Notify(targetItemNameBanh + " đạt mốc " + targetItemCountBanh + " (ĐK 3) -> Tự dùng 1 lần...");
 					}
 					else
 					{
@@ -1817,11 +2331,6 @@ public class AutoGop : IChatable
 				{
 					completedBatchesHn++;
 					retryCount = 0;
-					if (autoUseHn)
-					{
-						UseItemInBag(targetItemIdHn);
-					}
-
 					if (stopConditionHn == 1 && targetBatchesHn > 0 && completedBatchesHn >= targetBatchesHn)
 					{
 						FinishTabHn("Đã mua đủ " + completedBatchesHn + " đợt " + targetItemNameHn);
@@ -1832,45 +2341,19 @@ public class AutoGop : IChatable
 						stateTimestamp = mSystem.currentTimeMillis();
 					}
 				}
-				else if (currentRunningTab == 4)
-				{
-					completedBatchesZeno++;
-					retryCount = 0;
-					zenoMenuStep = 0;
-					lastBagCheckTime = 0;
-					Notify("▶ Đã đổi " + qtyToSend + " Tiên Phù Zeno (Đợt " + completedBatchesZeno + ")");
-
-					// Nhánh 1: Đạt mục tiêu chỉ định
-					if (targetBatchesZeno > 0 && completedBatchesZeno >= targetBatchesZeno)
-					{
-						FinishZenoDone("▶ Đã đổi đủ " + completedBatchesZeno + " đợt Zeno");
-					}
-					else
-					{
-						// Kiểm tra lại số vé trong hành trang
-						int currentTicket = GetBagItemCount(1583);
-						if (currentTicket < batchQtyZeno)
-						{
-							FinishZenoLack("■ Vé Zeno (" + currentTicket + ") < " + batchQtyZeno);
-						}
-						else
-						{
-							stepState = 5;
-							stateTimestamp = mSystem.currentTimeMillis();
-						}
-					}
-				}
-
 				return hideUi;
 			}
-			catch (Exception ex)
-			{
-				Notify("■ Lỗi xử lý gói -125: " + ex.Message);
-				return false;
-			}
 		}
-
-		return false;
+		catch (Exception ex)
+		{
+			if (currentRunningTab == 4)
+			{
+				EndZenoError(ZenoEndCode.ZENO_MENU_ERROR, "EX_125: " + ex.Message);
+				return true;
+			}
+			Notify("■ Lỗi xử lý gói -125: " + ex.Message);
+			return false;
+		}
 	}
 
 	public void OnServerInfo(string s)
@@ -1900,7 +2383,7 @@ public class AutoGop : IChatable
 			return;
 		}
 
-		bool narrowMatch = lower.Contains("hành trang đã đầy")
+		bool isResourceOrError = lower.Contains("hành trang đã đầy")
 			|| lower.Contains("hành trang đầy")
 			|| lower.Contains("rương đã đầy")
 			|| lower.Contains("chỗ trống")
@@ -1911,19 +2394,50 @@ public class AutoGop : IChatable
 			|| lower.Contains("hết điểm")
 			|| lower.Contains("hết vé");
 
-		// Từ khóa mở rộng chỉ áp dụng khi đang chờ phản hồi mua (Bánh/HN) để tránh bắt nhầm
-		bool waitingBuy = (currentRunningTab == 1 || currentRunningTab == 2) && (stepState == 3 || stepState == 4);
-		bool wideMatch = waitingBuy && (lower.Contains("thiếu")
+		bool waitingBuyOrTrade = ((currentRunningTab == 1 || currentRunningTab == 2) && (stepState == 3 || stepState == 4))
+			|| (currentRunningTab == 3 && pendingDiemAck)
+			|| (currentRunningTab == 4 && (zenoState == ZenoStepState.WaitMenu1 || zenoState == ZenoStepState.WaitMenu2 || zenoState == ZenoStepState.WaitInput || zenoState == ZenoStepState.WaitServerAck));
+
+		bool wideMatch = waitingBuyOrTrade && (lower.Contains("thiếu")
 			|| lower.Contains("cần có")
 			|| lower.Contains("cần thêm")
-			|| lower.Contains("không thể mua")
+			|| lower.Contains("không thể")
 			|| lower.Contains("thất bại")
 			|| lower.Contains("hết nguyên liệu")
-			|| lower.Contains("chưa có"));
+			|| lower.Contains("chưa có")
+			|| lower.Contains("không hợp lệ")
+			|| lower.Contains("quá giới hạn")
+			|| lower.Contains("từ chối")
+			|| lower.Contains("bị hủy")
+			|| lower.Contains("đã hủy"));
 
-		bool isResourceEmptyOrBagFull = narrowMatch || wideMatch;
+		if (currentRunningTab == 4 && zenoState == ZenoStepState.WaitServerAck && zenoPendingTransaction && !isResourceOrError && !wideMatch)
+		{
+			bool isPositiveZeno = lower.Contains("chúc mừng")
+				|| lower.Contains("đổi thành công")
+				|| lower.Contains("giao dịch thành công")
+				|| lower.Contains("bạn nhận được")
+				|| lower.Contains("nhận được tiên phù");
+			if (isPositiveZeno)
+			{
+				zenoServerConfirmedSuccess = true;
+				zenoConfirmInfoMs = mSystem.currentTimeMillis();
+				LogZenoEvent("ServerInfoPos", s, zenoMenu2CmdIdx, zenoMenu2CmdSubIdx, zenoTicketsBeforeBatch, GetBagItemCount(1583), mSystem.currentTimeMillis() - stateTimestamp, "PositiveAck");
+				CheckZenoAckConfirmation();
+			}
+			return;
+		}
 
-		if (!isResourceEmptyOrBagFull)
+		if (currentRunningTab == 3 && pendingDiemAck && !isResourceOrError && !wideMatch)
+		{
+			if (lower.Contains("nhận được") || lower.Contains("thành công") || lower.Contains("chúc mừng"))
+			{
+				ConfirmDiemBatchSuccess("server-info");
+			}
+			return;
+		}
+
+		if (!isResourceOrError && !wideMatch)
 		{
 			return;
 		}
@@ -1941,59 +2455,81 @@ public class AutoGop : IChatable
 
 	private void HandleResourceEmpty(string s, string lower)
 	{
-		bool isResourceEmptyOrBagFull = true;
-		if (isResourceEmptyOrBagFull)
+		if (hideUi)
 		{
-			if (hideUi)
+			GameCanvas.endDlg();
+			if (GameCanvas.menu.showMenu)
 			{
-				GameCanvas.endDlg();
-				if (GameCanvas.menu.showMenu)
-				{
-					GameCanvas.menu.doCloseMenu();
-				}
+				GameCanvas.menu.doCloseMenu();
 			}
+		}
 
-			if (currentRunningTab == 1)
+		if (currentRunningTab == 1)
+		{
+			bool isBagFull = lower.Contains("hành trang đã đầy") || lower.Contains("hành trang đầy") || lower.Contains("rương đã đầy") || lower.Contains("chỗ trống") || lower.Contains("ô trống");
+			if (isUsingAllBanh)
 			{
-				bool isBagFull = lower.Contains("hành trang đã đầy") || lower.Contains("hành trang đầy") || lower.Contains("rương đã đầy") || lower.Contains("chỗ trống") || lower.Contains("ô trống");
-				if (isUsingAllBanh)
+				if (isBagFull)
 				{
-					// Nếu đang dùng bánh mà bị đầy rương (không thể dùng tiếp) -> hoàn tất/chuyển tab ngay
-					if (isBagFull)
-					{
-						isUsingAllBanh = false;
-						FinishTabBanh("Đầy rương khi đang dùng bánh (" + s + ")");
-					}
+					CompleteBanhUsePhase("Đầy rương khi đang dùng bánh (" + s + ")");
 				}
-				else if (stopBanhCond2)
-				{
-					// ĐK 2 được tích: Đầy rương hoặc Hết tài nguyên -> thực hiện dừng/chuyển tab ngay
-					FinishTabBanh("Đầy rương / Hết tài nguyên (" + s + ") (ĐK 2)");
-				}
-				else if (stopBanhCond3 && !isBagFull && GetBagItemCount(targetItemIdBanh) > 0)
-				{
-					// Chỉ tích ĐK 3 mà hết tài nguyên mua (rương chưa đầy, vẫn còn bánh) -> dùng hết số bánh đang có
-					isUsingAllBanh = true;
-					stepState = 5;
-					stateTimestamp = mSystem.currentTimeMillis();
-					Notify("Hết TN -> Tự dùng hết " + targetItemNameBanh + " trong rương...");
-				}
-				else
-				{
-					FinishTabBanh("Đầy rương / Hết tài nguyên (" + s + ")");
-				}
+				return;
 			}
-			else if (currentRunningTab == 2)
+			InvalidateBagCache();
+			if (stopBanhCond3 && !isBagFull && GetBagItemCount(targetItemIdBanh) > 0)
 			{
-				FinishTabHn("Đầy rương / Hết tài nguyên (" + s + ")");
+				// Hết TN mua nhưng ĐK 3 đang bật và trong rương còn Bánh -> dùng đúng 1 lần trước khi xong
+				isUsingAllBanh = true;
+				banhUseSent = false;
+				banhUseSentTimestamp = 0;
+				stepState = 5;
+				stateTimestamp = mSystem.currentTimeMillis();
+				Notify("Hết TN -> Tự dùng " + targetItemNameBanh + " 1 lần trong rương...");
 			}
-			else if (currentRunningTab == 3)
+			else if (stopBanhCond2)
 			{
-				FinishTabDiem("Đầy rương / Hết điểm (" + s + ")");
+				FinishTabBanh("Đầy rương / Hết tài nguyên (" + s + ") (ĐK 2)");
 			}
-			else if (currentRunningTab == 4)
+			else
 			{
-				FinishZenoLack("Hết vé Zeno / Đầy rương (" + s + ")");
+				FinishTabBanh("Đầy rương / Hết tài nguyên (" + s + ")");
+			}
+		}
+		else if (currentRunningTab == 2)
+		{
+			FinishTabHn("Đầy rương / Hết tài nguyên (" + s + ")");
+		}
+		else if (currentRunningTab == 3)
+		{
+			pendingDiemAck = false;
+			pendingDiemPick = -1;
+			FinishTabDiem("Đầy rương / Hết điểm (" + s + ")");
+		}
+		else if (currentRunningTab == 4)
+		{
+			if (zenoState != ZenoStepState.WaitMenu1 && zenoState != ZenoStepState.WaitMenu2 && zenoState != ZenoStepState.WaitInput && zenoState != ZenoStepState.WaitServerAck)
+			{
+				return;
+			}
+			InvalidateBagCache();
+			int curTickets = GetBagItemCount(1583);
+			bool isTicketLackMsg = lower.Contains("hết vé")
+				|| lower.Contains("không đủ vé")
+				|| lower.Contains("thiếu vé")
+				|| ((lower.Contains("không đủ") || lower.Contains("còn thiếu") || lower.Contains("thiếu")) && (lower.Contains("vé") || lower.Contains("zeno") || lower.Contains("1583")));
+			if (isTicketLackMsg)
+			{
+				zenoPendingTransaction = false;
+				zenoServerConfirmedSuccess = false;
+				zenoState = ZenoStepState.None;
+				lastZenoEndCode = ZenoEndCode.ZENO_LACK_TICKETS;
+				lastZenoEndReason = s;
+				LogZenoEvent("ServerLack", s, -1, -1, zenoTicketsBeforeBatch, curTickets, mSystem.currentTimeMillis() - stateTimestamp, "ZENO_LACK_TICKETS");
+				FinishZenoLack("Thiếu vé Zeno (" + s + ")");
+			}
+			else
+			{
+				EndZenoError(ZenoEndCode.ZENO_SERVER_REJECT, "Server từ chối đổi Zeno: " + s);
 			}
 		}
 	}
@@ -2044,7 +2580,7 @@ public class AutoGop : IChatable
 			return;
 		}
 
-		if (hideUi && !isWaitingXmap && stepState != 7)
+		if (hideUi)
 		{
 			if (currentRunningTab == 4)
 			{
@@ -2076,99 +2612,41 @@ public class AutoGop : IChatable
 
 		long now = mSystem.currentTimeMillis();
 
-		// stepState == 7: Chờ Xmap tới Map chứa NPC
-		if (stepState == 7 && isWaitingXmap)
+		// Chờ delay chuyển tiếp phi đệ quy giữa các Tab
+		if (stepState == 6)
 		{
-			if (TileMap.mapID == xmapTargetMapId)
+			if (now - stateTimestamp >= delayBetweenTabsMs)
 			{
-				if (xmapArrivedTimestamp == 0)
+				int nextTab = pendingRouteTab;
+				if (nextTab < 1 || nextTab > 4)
 				{
-					xmapArrivedTimestamp = now;
+					nextTab = (isRunningWorkflow && queueIndex >= 0 && queueIndex < workflowQueue.Count) ? workflowQueue[queueIndex] : -1;
 				}
-				Npc targetNpc = (xmapTargetNpcId >= 0) ? ModFunc.GetNpcByTempId(xmapTargetNpcId) : null;
-				if (targetNpc != null)
+				pendingRouteTab = -1;
+				pendingRouteReason = string.Empty;
+				if (nextTab >= 1 && nextTab <= 4)
 				{
-					if (AutoXmap.IsXmapRunning)
-					{
-						XmapController.FinishXmap();
-					}
-					isWaitingXmap = false;
-					xmapArrivedTimestamp = 0;
-					retryCount = 0;
-					if (currentRunningTab == 4)
-					{
-						zenoMenuStep = 0;
-						lastZenoMenu2Idx = 0;
-						lastZenoDebug = string.Empty;
-						MoveCloseToZenoNpc();
-						Notify("▶ [Tab Zeno] Đã tới Karin (18), bắt đầu đổi " + batchQtyZeno + " Tiên Phù...");
-						Service.gI().openMenu(18);
-						stepState = 2;
-					}
-					else
-					{
-						MoveCloseToNpc(xmapTargetNpcId);
-						Notify("▶ [" + GetTabName(currentRunningTab) + "] Đã tới Map " + xmapTargetMapId + ", bắt đầu tương tác NPC " + xmapTargetNpcId);
-						stepState = 1;
-					}
+					stepState = 1;
 					stateTimestamp = now;
+					StartTab(nextTab);
 				}
-				else if (now - xmapArrivedTimestamp >= 3500)
+				else
 				{
-					if (AutoXmap.IsXmapRunning)
-					{
-						XmapController.FinishXmap();
-					}
-					isWaitingXmap = false;
-					xmapArrivedTimestamp = 0;
-					int failedTab = currentRunningTab;
-					if (failedTab == 4) FinishZenoLack("■ Không tìm thấy NPC Thần Mèo Karin (18) tại Map " + xmapTargetMapId);
-					else if (failedTab == 1) FinishTabBanh("■ Không tìm thấy NPC 92 tại Map " + xmapTargetMapId);
-					else if (failedTab == 2) FinishTabHn("■ Không tìm thấy NPC 56 tại Map " + xmapTargetMapId);
-					else if (failedTab == 3) FinishTabDiem("■ Không tìm thấy NPC 66 tại Map " + xmapTargetMapId);
-				}
-			}
-			else
-			{
-				if (!AutoXmap.IsXmapRunning && !XmapData.GI().IsLoading && !Char.isLoadingMap && !Char.ischangingMap && now - stateTimestamp >= 2000)
-				{
-					if (retryCount < 1)
-					{
-						retryCount++;
-						stateTimestamp = now;
-						XmapController.FinishXmap();
-						XmapController.StartRunToMapId(xmapTargetMapId);
-					}
-					else if (now - stateTimestamp >= 4000)
-					{
-						isWaitingXmap = false;
-						int failedTab = currentRunningTab;
-						if (failedTab == 4) FinishZenoLack("■ Không thể Xmap tới Map " + xmapTargetMapId);
-						else if (failedTab == 1) FinishTabBanh("■ Không thể Xmap tới Map " + xmapTargetMapId);
-						else if (failedTab == 2) FinishTabHn("■ Không thể Xmap tới Map " + xmapTargetMapId);
-						else if (failedTab == 3) FinishTabDiem("■ Không thể Xmap tới Map " + xmapTargetMapId);
-					}
-				}
-				long xmapElapsedBase = (xmapStartTimestamp > 0) ? xmapStartTimestamp : stateTimestamp;
-				if (isRunning && now - xmapElapsedBase >= 45000)
-				{
-					if (AutoXmap.IsXmapRunning)
-					{
-						XmapController.FinishXmap();
-					}
-					isWaitingXmap = false;
-					int failedTab = currentRunningTab;
-					if (failedTab == 4) FinishZenoLack("■ Quá thời gian di chuyển tới Tháp Karin (Map " + xmapTargetMapId + ")");
-					else if (failedTab == 1) FinishTabBanh("■ Quá thời gian quay lại Map " + xmapTargetMapId);
-					else if (failedTab == 2) FinishTabHn("■ Quá thời gian quay lại Map " + xmapTargetMapId);
-					else if (failedTab == 3) FinishTabDiem("■ Quá thời gian quay lại Map " + xmapTargetMapId);
+					StopAll("■ Lỗi chuyển tiếp Tab không hợp lệ");
 				}
 			}
 			return;
 		}
 
-		// stepState == 1: Chuẩn bị di chuyển đến NPC và mở Menu
-		if (stepState == 1 && currentRunningTab >= 1 && currentRunningTab <= 4)
+		// State machine riêng cho Tab 4 Zeno (KHÔNG XMap, KHÔNG dùng chung stepState 3/4/7 của shop)
+		if (currentRunningTab == 4)
+		{
+			UpdateZenoStateMachine(now);
+			return;
+		}
+
+		// stepState == 1: Chuẩn bị di chuyển đến NPC và mở Menu (Tabs 1-3)
+		if (stepState == 1 && currentRunningTab >= 1 && currentRunningTab <= 3)
 		{
 			if (now - stateTimestamp >= 200)
 			{
@@ -2181,77 +2659,79 @@ public class AutoGop : IChatable
 				{
 					stepState = 2;
 					stateTimestamp = now;
-					if (currentRunningTab == 4)
-					{
-						zenoMenuStep = 0;
-						lastZenoMenu2Idx = 0;
-						MoveCloseToZenoNpc();
-					}
-					else
-					{
-						MoveCloseToNpc(npcId);
-					}
+					MoveCloseToNpc(npcId);
 					Service.gI().openMenu(npcId);
 				}
-				else if (now - stateTimestamp >= 3500)
+				else if (now - stateTimestamp >= 2000)
 				{
-					npcRetryCount++;
-					if (npcRetryCount > 2)
-					{
-						npcRetryCount = 0;
-						if (currentRunningTab == 1) FinishTabBanh("■ Không thấy NPC 92 trong Map");
-						else if (currentRunningTab == 2) FinishTabHn("■ Không thấy NPC 56 trong Map");
-						else if (currentRunningTab == 3) FinishTabDiem("■ Không thấy NPC 66 trong Map");
-						else if (currentRunningTab == 4) FinishZenoLack("■ Không thấy NPC 18 trong Map");
-					}
-					else
-					{
-						stateTimestamp = now;
-					}
+					HandleMissingMapNpc(currentRunningTab, npcId, 5);
 				}
 			}
 			return;
 		}
 
-		// Giữ vững npcFocus trong khi chờ Menu phản hồi (tránh Char.autoFocus xóa mất npcFocus trước khi gói 33 tới)
-		if (stepState == 2 && currentRunningTab >= 1 && currentRunningTab <= 4)
+		// Giữ vững npcFocus trong khi chờ Menu phản hồi (tránh Char.autoFocus xóa mất npcFocus)
+		if (stepState == 2 && currentRunningTab >= 1 && currentRunningTab <= 3)
 		{
 			int focusNpcId = GetCurrentTargetNpcId();
 			Npc focusNpc = (focusNpcId >= 0) ? ModFunc.GetNpcByTempId(focusNpcId) : null;
 			if (focusNpc != null && Char.myCharz() != null && (Char.myCharz().npcFocus == null || Char.myCharz().npcFocus.template == null || Char.myCharz().npcFocus.template.npcTemplateId != focusNpcId))
 			{
-				if (currentRunningTab != 4)
-				{
-					Char.myCharz().FocusManualTo(focusNpc);
-				}
+				Char.myCharz().FocusManualTo(focusNpc);
 				Char.myCharz().npcFocus = focusNpc;
 			}
 		}
 
-		// Chờ delay chuyển tiếp giữa các Tab
-		if (stepState == 6)
+		// Xử lý cơ chế dùng Bánh ĐÚNG 1 LẦN ở Tab 1 (bỏ vòng lặp spam mỗi 200ms)
+		if (currentRunningTab == 1 && isUsingAllBanh)
 		{
-			if (now - stateTimestamp >= delayBetweenTabsMs)
+			InvalidateBagCache();
+			int curBanh = GetBagItemCount(targetItemIdBanh);
+			if (!banhUseSent)
 			{
-				stepState = 1;
+				banhUseSent = true;
+				banhUseSentTimestamp = now;
 				stateTimestamp = now;
-				StartTab(workflowQueue[queueIndex]);
+				if (curBanh <= 0)
+				{
+					CompleteBanhUsePhase("Không còn " + targetItemNameBanh + " trong rương");
+					return;
+				}
+				if (!UseItemInBag(targetItemIdBanh))
+				{
+					CompleteBanhUsePhase("Không tìm thấy " + targetItemNameBanh + " trong rương để dùng");
+					return;
+				}
+				Notify("▶ Đã gửi 1 lệnh dùng " + targetItemNameBanh + " (hiện có " + curBanh + "), đang xác minh rương...");
+				return;
+			}
+			if (curBanh <= 0)
+			{
+				CompleteBanhUsePhase("Đã dùng sạch toàn bộ " + targetItemNameBanh + " trong rương");
+				return;
+			}
+			if (now - banhUseSentTimestamp >= BanhUseVerifyTimeoutMs)
+			{
+				CompleteBanhUsePhase("Đã dùng 1 lần " + targetItemNameBanh + ", trong rương vẫn còn " + curBanh + " cái");
+				return;
 			}
 			return;
 		}
 
-		// Xử lý cơ chế dùng hết bánh ở Tab 1
-		if (currentRunningTab == 1 && isUsingAllBanh)
+		// Xử lý chờ xác nhận giao dịch Tab 3 Điểm
+		if (currentRunningTab == 3 && pendingDiemAck)
 		{
-			if (now - stateTimestamp >= delayUseBanhMs)
+			int ackWaitMs = System.Math.Max(450, delayDiemMs);
+			InvalidateBagCache();
+			if (GetTotalBagItemUnits() != diemBagUnitsSnapshot || GetEmptyBagSlots() != diemBagSlotsSnapshot)
 			{
-				stateTimestamp = now;
-				if (!UseItemInBag(targetItemIdBanh))
-				{
-					// Đã dùng sạch bánh trong rương!
-					isUsingAllBanh = false;
-					FinishTabBanh("Đã dùng hết toàn bộ " + targetItemNameBanh + " trong rương");
-				}
+				ConfirmDiemBatchSuccess("bag-delta");
+				return;
+			}
+			if (now - diemAckTimestamp >= ackWaitMs)
+			{
+				ConfirmDiemBatchSuccess("no-reject-timeout");
+				return;
 			}
 			return;
 		}
@@ -2266,7 +2746,7 @@ public class AutoGop : IChatable
 			return;
 		}
 
-		// stepState == 4: Chờ gói -125 từ Server
+		// stepState == 4: Chờ gói -125 từ Server (Tabs 1-2)
 		if (stepState == 4)
 		{
 			if (now - stateTimestamp >= 2500)
@@ -2278,10 +2758,6 @@ public class AutoGop : IChatable
 					if (currentRunningTab == 1 || currentRunningTab == 2)
 					{
 						TriggerBuyCurrentTab();
-					}
-					else if (currentRunningTab == 4)
-					{
-						SendZenoMenuRetry();
 					}
 				}
 				else
@@ -2295,34 +2771,28 @@ public class AutoGop : IChatable
 					{
 						FinishTabHn("Hết nguyên liệu / Server không gửi gói -125");
 					}
-					else if (currentRunningTab == 4)
-					{
-						zenoMenuStep = 0;
-						FinishZenoLack(string.IsNullOrEmpty(lastZenoDebug)
-							? "■ Hết vé Zeno / Server không gửi gói -125"
-							: ("■ Hết vé Zeno / Không thấy gói -125 (" + lastZenoDebug + ")"));
-					}
 				}
 			}
 			return;
 		}
 
-		// Cooldown giữa các đợt mua / đổi
+		// Cooldown giữa các đợt mua / đổi (Tabs 1-3)
 		if (stepState == 5)
 		{
-			int currentDelay = (currentRunningTab == 1) ? delayBuyBanhMs : ((currentRunningTab == 2) ? delayBuyHnMs : ((currentRunningTab == 3) ? delayDiemMs : delayZenoMs));
+			int currentDelay = (currentRunningTab == 1) ? delayBuyBanhMs : ((currentRunningTab == 2) ? delayBuyHnMs : delayDiemMs);
 			if (now - stateTimestamp >= currentDelay)
 			{
 				stateTimestamp = now;
 
-				// Lặp lại đợt tiếp theo
 				if (currentRunningTab == 1)
 				{
-					// Kiểm tra lại mốc bánh rương cho ĐK 3 trước khi mua tiếp
+					InvalidateBagCache();
 					if (stopBanhCond3 && GetBagItemCount(targetItemIdBanh) >= targetItemCountBanh)
 					{
 						isUsingAllBanh = true;
-						Notify(targetItemNameBanh + " đạt mốc " + targetItemCountBanh + " (ĐK 3) -> Tự dùng hết trong rương...");
+						banhUseSent = false;
+						banhUseSentTimestamp = 0;
+						Notify(targetItemNameBanh + " đạt mốc " + targetItemCountBanh + " (ĐK 3) -> Tự dùng 1 lần...");
 						return;
 					}
 					TriggerBuyCurrentTab();
@@ -2337,29 +2807,11 @@ public class AutoGop : IChatable
 					Service.gI().openMenu(66);
 					stepState = 2;
 				}
-				else if (currentRunningTab == 4)
-				{
-					lastBagCheckTime = 0;
-					int currentTicket = GetBagItemCount(1583);
-					if (currentTicket < batchQtyZeno)
-					{
-						FinishZenoLack("■ Vé Zeno (" + currentTicket + ") < " + batchQtyZeno);
-						return;
-					}
-					zenoMenuStep = 0;
-					lastZenoMenu2Idx = 0;
-					retryCount = 0;
-					npcRetryCount = 0;
-					stateTimestamp = now;
-					MoveCloseToZenoNpc();
-					Service.gI().openMenu(18);
-					stepState = 2;
-				}
 			}
 			return;
 		}
 
-		// Timeout bảo vệ nếu server lag quá 3.5s (áp dụng cho cả stepState 1, 2, 3)
+		// Timeout bảo vệ nếu server lag quá 3.5s (Tabs 1-3)
 		if ((stepState == 1 || stepState == 2 || stepState == 3) && now - stateTimestamp >= 3500)
 		{
 			stateTimestamp = now;
@@ -2370,37 +2822,165 @@ public class AutoGop : IChatable
 				if (currentRunningTab == 1) FinishTabBanh("Không mở được NPC 92 (quá 3 lần)");
 				else if (currentRunningTab == 2) FinishTabHn("Không mở được NPC 56 (quá 3 lần)");
 				else if (currentRunningTab == 3) FinishTabDiem("Không mở được NPC 66 (quá 3 lần)");
-				else if (currentRunningTab == 4)
-				{
-					zenoMenuStep = 0;
-					lastZenoMenu2Idx = 0;
-					FinishZenoLack(string.IsNullOrEmpty(lastZenoDebug)
-						? "■ Không mở được NPC 18 (quá 3 lần)"
-						: ("■ Không mở được NPC 18 (" + lastZenoDebug + ")"));
-				}
 				return;
 			}
 			stepState = 1;
-			if (currentRunningTab == 1)
+			if (currentRunningTab == 1) MoveCloseToNpc(92);
+			else if (currentRunningTab == 2) MoveCloseToNpc(56);
+			else if (currentRunningTab == 3) MoveCloseToNpc(66);
+		}
+	}
+
+	private void UpdateZenoStateMachine(long now)
+	{
+		Npc karin = ModFunc.GetNpcByTempId(18);
+		if (TileMap.mapID != 5 || karin == null || karin.statusMe == 15)
+		{
+			EndZenoError(ZenoEndCode.WRONG_MAP_ZENO, "Mất điều kiện Map 5 / NPC 18 trong lúc đổi Zeno — hãy đứng sẵn ở Tháp Karin!");
+			return;
+		}
+
+		switch (zenoState)
+		{
+		case ZenoStepState.ApproachNpc:
+			if (IsWithinNpcInteractRange(karin, 55, 50))
 			{
-				MoveCloseToNpc(92);
-			}
-			else if (currentRunningTab == 2)
-			{
-				MoveCloseToNpc(56);
-			}
-			else if (currentRunningTab == 3)
-			{
-				MoveCloseToNpc(66);
-			}
-			else if (currentRunningTab == 4)
-			{
-				zenoMenuStep = 0;
-				lastZenoMenu2Idx = 0;
-				MoveCloseToZenoNpc();
-				Service.gI().openMenu(18);
+				if (Char.myCharz() != null)
+				{
+					Char.myCharz().currentMovePoint = null;
+				}
+				FocusNpcSafely(karin);
+				InvalidateBagCache();
+				int curTickets = GetBagItemCount(1583);
+				zenoState = ZenoStepState.WaitMenu1;
 				stepState = 2;
+				retryCount = 0;
+				npcRetryCount = 0;
+				stateTimestamp = now;
+				Notify("▶ Đã tới gần Karin (18), mở Menu đổi " + batchQtyZeno + " Tiên Phù...");
+				LogZenoEvent("ApproachDone", "", -1, -1, curTickets, curTickets, now - approachMoveIssuedMs, "Send openMenu(18)");
+				Service.gI().openMenu(18);
 			}
+			else if (now - approachMoveIssuedMs >= 5000)
+			{
+				EndZenoError(ZenoEndCode.WRONG_MAP_ZENO, "Không thể tới gần NPC Thần Mèo Karin (18) trong Map 5 sau 5s");
+			}
+			else if (Char.myCharz() != null && Char.myCharz().currentMovePoint == null)
+			{
+				MoveCloseToZenoNpcSmoothly(karin);
+			}
+			break;
+
+		case ZenoStepState.WaitMenu1:
+			FocusNpcSafely(karin);
+			if (now - stateTimestamp >= 2500)
+			{
+				retryCount++;
+				if (retryCount <= 2)
+				{
+					stateTimestamp = now;
+					LogZenoEvent("RetryMenu1", "", -1, -1, zenoTicketsBeforeBatch, GetBagItemCount(1583), 2500, "Retry openMenu(18) #" + retryCount);
+					Service.gI().openMenu(18);
+				}
+				else
+				{
+					EndZenoError(ZenoEndCode.ZENO_MENU_ERROR, "MENU_TIMEOUT (WaitMenu1): NPC 18 không mở Menu 1 sau 3 lần thử");
+				}
+			}
+			break;
+
+		case ZenoStepState.WaitMenu2:
+			FocusNpcSafely(karin);
+			if (now - stateTimestamp >= 2500)
+			{
+				retryCount++;
+				if (retryCount <= 2)
+				{
+					stateTimestamp = now;
+					LogZenoEvent("RetryMenu2", "", zenoMenu1CmdIdx, zenoMenu1CmdSubIdx, zenoTicketsBeforeBatch, GetBagItemCount(1583), 2500, "RetryMenu1Cmd type=" + zenoMenu1CmdType + " #" + retryCount);
+					SendZenoPacketCommand(zenoMenu1CmdType, zenoMenu1CmdIdx, zenoMenu1CmdSubIdx, zenoMenu1CmdId);
+				}
+				else
+				{
+					EndZenoError(ZenoEndCode.ZENO_MENU_ERROR, "MENU_TIMEOUT (WaitMenu2): Không nhận Menu 2 sau khi chọn Đổi Tiên Phù");
+				}
+			}
+			break;
+
+		case ZenoStepState.WaitInput:
+			if (now - stateTimestamp >= 2500)
+			{
+				retryCount++;
+				if (retryCount <= 1)
+				{
+					stateTimestamp = now;
+					FocusNpcSafely(karin);
+					LogZenoEvent("RetryInput", "", zenoMenu2CmdIdx, zenoMenu2CmdSubIdx, zenoTicketsBeforeBatch, GetBagItemCount(1583), 2500, "RetryMenu2Cmd type=" + zenoMenu2CmdType + " #" + retryCount);
+					SendZenoPacketCommand(zenoMenu2CmdType, zenoMenu2CmdIdx, zenoMenu2CmdSubIdx, zenoMenu2CmdId);
+				}
+				else
+				{
+					EndZenoError(ZenoEndCode.ZENO_INPUT_TIMEOUT, "INPUT_TIMEOUT: Không nhận gói -125 sau khi chọn Tiên Phù Zeno");
+				}
+			}
+			break;
+
+		case ZenoStepState.WaitServerAck:
+			CheckZenoAckConfirmation();
+			if (!isRunning || currentRunningTab != 4 || zenoState != ZenoStepState.WaitServerAck)
+			{
+				return;
+			}
+			if (zenoServerConfirmedSuccess && now - zenoConfirmInfoMs >= 200)
+			{
+				InvalidateBagCache();
+				CompleteZenoBatchSuccess(GetBagItemCount(1583));
+				return;
+			}
+			if (now - stateTimestamp >= 3000)
+			{
+				EndZenoError(ZenoEndCode.ZENO_ACK_TIMEOUT, "ACK_TIMEOUT: Đã gửi -125 nhưng server không xác nhận/không trừ vé 1583 sau 3s");
+			}
+			break;
+
+		case ZenoStepState.Cooldown:
+			if (now - stateTimestamp >= delayZenoMs)
+			{
+				InvalidateBagCache();
+				int curTicket = GetBagItemCount(1583);
+				if (curTicket < batchQtyZeno)
+				{
+					lastZenoEndCode = ZenoEndCode.ZENO_LACK_TICKETS;
+					lastZenoEndReason = "Vé Zeno (" + curTicket + ") < " + batchQtyZeno;
+					zenoState = ZenoStepState.None;
+					FinishZenoLack("■ Vé Zeno (" + curTicket + ") < " + batchQtyZeno);
+					return;
+				}
+				zenoTalkPassCount = 0;
+				zenoMenu1ResyncCount = 0;
+				zenoPendingTransaction = false;
+				zenoServerConfirmedSuccess = false;
+				retryCount = 0;
+				npcRetryCount = 0;
+				if (IsWithinNpcInteractRange(karin, 55, 50))
+				{
+					FocusNpcSafely(karin);
+					zenoState = ZenoStepState.WaitMenu1;
+					stepState = 2;
+					stateTimestamp = now;
+					LogZenoEvent("NextBatch", "", -1, -1, curTicket, curTicket, 0, "openMenu(18) batch " + (completedBatchesZeno + 1));
+					Service.gI().openMenu(18);
+				}
+				else
+				{
+					zenoState = ZenoStepState.ApproachNpc;
+					stepState = 1;
+					stateTimestamp = now;
+					approachMoveIssuedMs = now;
+					MoveCloseToZenoNpcSmoothly(karin);
+				}
+			}
+			break;
 		}
 	}
 
@@ -2441,12 +3021,10 @@ public class AutoGop : IChatable
 			// Tab 1 Bánh
 			case 10: targetItemIdBanh = System.Math.Max(0, val); break;
 			case 11: batchQtyBanh = System.Math.Max(1, System.Math.Min(1000, val)); break;
-			case 12: targetBatchesBanh = System.Math.Max(0, val); break;
 			case 13: delayBuyBanhMs = System.Math.Max(50, val); break;
 			case 14: targetItemCountBanh = System.Math.Max(1, val); break;
-			case 15: delayUseBanhMs = System.Math.Max(50, val); break;
 			case 16: routeTargetTabBanh = System.Math.Max(1, System.Math.Min(4, val)); break;
-			// Tab 2 HN
+			// Tab 2 BOX HỒNG NGỌC SSS
 			case 20: targetItemIdHn = System.Math.Max(0, val); break;
 			case 21: batchQtyHn = System.Math.Max(1, System.Math.Min(1000, val)); break;
 			case 22: targetBatchesHn = System.Math.Max(0, val); break;
@@ -2654,7 +3232,7 @@ public class AutoGop : IChatable
 				return;
 			}
 
-			int rY = winY + 66;
+			int rY = winY + 68;
 			// Batch Qty
 			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 16))
 			{
@@ -2663,50 +3241,31 @@ public class AutoGop : IChatable
 				return;
 			}
 			// Delay
-			rY += 17;
+			rY += 20;
 			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 16))
 			{
 				GameCanvas.clearAllPointerEvent();
 				OpenInputField(13, "Độ trễ mỗi đợt mua (ms)", delayBuyBanhMs.ToString());
 				return;
 			}
-			// ĐK 1: Đủ số đợt mua
-			rY += 18;
-			if (GameCanvas.isPointerHoldIn(winX + 10, rY, 140, 16))
-			{
-				stopBanhCond1 = !stopBanhCond1;
-				if (!stopBanhCond1 && !stopBanhCond2 && !stopBanhCond3)
-				{
-					stopBanhCond1 = true;
-				}
-				GameCanvas.clearAllPointerEvent();
-				return;
-			}
-			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 16))
-			{
-				stopBanhCond1 = true;
-				GameCanvas.clearAllPointerEvent();
-				OpenInputField(12, "Số đợt mua cần đạt (0 = vô hạn)", targetBatchesBanh.ToString());
-				return;
-			}
 			// ĐK 2: Đầy rương / Hết tài nguyên (có thể tích cùng lúc với ĐK 3)
-			rY += 17;
-			if (GameCanvas.isPointerHoldIn(winX + 10, rY, 190, 15))
+			rY += 21;
+			if (GameCanvas.isPointerHoldIn(winX + 10, rY, 190, 16))
 			{
 				stopBanhCond2 = !stopBanhCond2;
-				if (!stopBanhCond1 && !stopBanhCond2 && !stopBanhCond3)
+				if (!stopBanhCond2 && !stopBanhCond3)
 				{
 					stopBanhCond2 = true;
 				}
 				GameCanvas.clearAllPointerEvent();
 				return;
 			}
-			// ĐK 3: Đạt mốc bánh trong rương -> Dùng hết (có thể tích cùng lúc với ĐK 2)
-			rY += 17;
+			// ĐK 3: Đạt mốc bánh trong rương -> Dùng 1 lần (có thể tích cùng lúc với ĐK 2)
+			rY += 20;
 			if (GameCanvas.isPointerHoldIn(winX + 10, rY, 140, 16))
 			{
 				stopBanhCond3 = !stopBanhCond3;
-				if (!stopBanhCond1 && !stopBanhCond2 && !stopBanhCond3)
+				if (!stopBanhCond2 && !stopBanhCond3)
 				{
 					stopBanhCond3 = true;
 				}
@@ -2721,7 +3280,7 @@ public class AutoGop : IChatable
 				return;
 			}
 			// Rẽ nhánh khi xong Tab Bánh
-			rY += 18;
+			rY += 21;
 			if (GameCanvas.isPointerHoldIn(winX + 10, rY, 140, 16))
 			{
 				enableRoutingBanh = !enableRoutingBanh;
@@ -2736,14 +3295,14 @@ public class AutoGop : IChatable
 			}
 		}
 
-		// === TAB 2: HN ===
+		// === TAB 2: BOX HỒNG NGỌC SSS ===
 		if (selectedTab == 2)
 		{
 			// Click dòng thông tin item để nhập ID tùy chỉnh
 			if (GameCanvas.isPointerHoldIn(winX + 10, winY + 50, 145, 16))
 			{
 				GameCanvas.clearAllPointerEvent();
-				OpenInputField(20, "Nhập ID vật phẩm HN", targetItemIdHn.ToString());
+				OpenInputField(20, "Nhập ID vật phẩm BOX HN SSS", targetItemIdHn.ToString());
 				return;
 			}
 
@@ -2756,7 +3315,7 @@ public class AutoGop : IChatable
 				return;
 			}
 			// Target Batches
-			rY += 17;
+			rY += 18;
 			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 16))
 			{
 				GameCanvas.clearAllPointerEvent();
@@ -2764,45 +3323,31 @@ public class AutoGop : IChatable
 				return;
 			}
 			// Delay
-			rY += 17;
+			rY += 18;
 			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 16))
 			{
 				GameCanvas.clearAllPointerEvent();
 				OpenInputField(23, "Độ trễ mỗi đợt (ms)", delayBuyHnMs.ToString());
 				return;
 			}
-			// Radio ĐK dừng HN: Đủ đợt vs Đầy/Hết
-			rY += 18;
-			if (GameCanvas.isPointerHoldIn(winX + 10, rY, 95, 15))
+			// Radio ĐK 1: Đủ đợt
+			rY += 19;
+			if (GameCanvas.isPointerHoldIn(winX + 10, rY, winW - 20, 15))
 			{
 				stopConditionHn = 1;
 				GameCanvas.clearAllPointerEvent();
 				return;
 			}
-			if (GameCanvas.isPointerHoldIn(winX + 110, rY, 105, 15))
-			{
-				stopConditionHn = 2;
-				GameCanvas.clearAllPointerEvent();
-				return;
-			}
-			// Checkbox ĐK 3: Zeno < SL x 40K
-			rY += 17;
+			// Radio ĐK 3: Zeno < SL x 40K
+			rY += 18;
 			if (GameCanvas.isPointerHoldIn(winX + 10, rY, winW - 20, 15))
 			{
-				stopHnCond3 = !stopHnCond3;
-				GameCanvas.clearAllPointerEvent();
-				return;
-			}
-			// Checkbox vừa mua vừa dùng
-			rY += 17;
-			if (GameCanvas.isPointerHoldIn(winX + 10, rY, winW - 20, 15))
-			{
-				autoUseHn = !autoUseHn;
+				stopConditionHn = 3;
 				GameCanvas.clearAllPointerEvent();
 				return;
 			}
 			// Checkbox rẽ nhánh ưu tiên (Local routing)
-			rY += 17;
+			rY += 19;
 			if (GameCanvas.isPointerHoldIn(winX + 10, rY, 140, 16))
 			{
 				enableRoutingHn = !enableRoutingHn;
@@ -3081,7 +3626,7 @@ public class AutoGop : IChatable
 			DrawInputBox(g, inputX, rY, 52, 14, orderBanh.ToString(), isGreenText: true);
 
 			rY += 16;
-			DrawCheckbox(g, labelX, rY, enableHn, "2. Auto HN (56)");
+			DrawCheckbox(g, labelX, rY, enableHn, "2. BOX HN SSS (56)");
 			mFont.tahoma_7_white.drawString(g, "Thứ tự:", inputX - 34, rY + 1, mFont.LEFT);
 			DrawInputBox(g, inputX, rY, 52, 14, orderHn.ToString(), isGreenText: true);
 
@@ -3091,7 +3636,7 @@ public class AutoGop : IChatable
 			DrawInputBox(g, inputX, rY, 52, 14, orderDiem.ToString(), isGreenText: true);
 
 			rY += 16;
-			DrawCheckbox(g, labelX, rY, enableZeno, "4. Đổi Zeno (18)");
+			DrawCheckbox(g, labelX, rY, enableZeno, "4. Đổi Zeno (18-Karin)");
 			mFont.tahoma_7_white.drawString(g, "Thứ tự:", inputX - 34, rY + 1, mFont.LEFT);
 			DrawInputBox(g, inputX, rY, 52, 14, orderZeno.ToString(), isGreenText: true);
 
@@ -3117,7 +3662,8 @@ public class AutoGop : IChatable
 			string statusText = isRunningWorkflow
 				? ("Đang chạy: " + GetTabName(currentRunningTab) + " (" + loopRunInfo + ")")
 				: (isRunning ? ("Chạy lẻ: Tab " + GetTabName(currentRunningTab)) : "Trạng thái: Sẵn sàng (Phím F3)");
-			mFont.tahoma_7_yellow.drawString(g, statusText, headerCenterX, winY + 180, mFont.CENTER);
+			mFont.tahoma_7_yellow.drawString(g, statusText, headerCenterX, winY + 174, mFont.CENTER);
+			mFont.tahoma_7_white.drawString(g, "Khác map (Kame/Karin): tự chuyển map!", headerCenterX, winY + 185, mFont.CENTER);
 		}
 
 		// === NỘI DUNG TAB 1: BÁNH ===
@@ -3128,44 +3674,39 @@ public class AutoGop : IChatable
 			mFont.tahoma_7_yellow.drawString(g, "Bánh: " + GetBagItemCount(targetItemIdBanh), inputX + 50, rY - 2, mFont.RIGHT);
 			mFont.tahoma_7_red.drawString(g, "H.Ngọc: " + FormatShortNumber(GetHongNgoc()), inputX + 50, rY + 7, mFont.RIGHT);
 
-			rY = winY + 66;
+			rY = winY + 68;
 			mFont.tahoma_7_white.drawString(g, "Số lượng / đợt:", labelX, rY + 1, mFont.LEFT);
 			DrawInputBox(g, inputX, rY, 52, 15, batchQtyBanh.ToString(), isGreenText: true);
 
-			rY += 17;
+			rY += 20;
 			mFont.tahoma_7_white.drawString(g, "Độ trễ mỗi đợt:", labelX, rY + 1, mFont.LEFT);
 			DrawInputBox(g, inputX, rY, 52, 15, delayBuyBanhMs + " ms", isGreenText: false);
 
-			rY += 18;
-			DrawCheckbox(g, labelX, rY, stopBanhCond1, "ĐK 1: Đủ số đợt mua");
-			DrawInputBox(g, inputX, rY, 52, 15, targetBatchesBanh.ToString(), isGreenText: true);
-
-			rY += 17;
+			rY += 21;
 			DrawCheckbox(g, labelX, rY, stopBanhCond2, "ĐK 2: Đầy rương / Hết tài nguyên");
 
-			rY += 17;
-			DrawCheckbox(g, labelX, rY, stopBanhCond3, "ĐK 3: Đạt mốc -> Dùng hết");
+			rY += 20;
+			DrawCheckbox(g, labelX, rY, stopBanhCond3, "ĐK 3: Đạt mốc -> Dùng 1 lần");
 			DrawInputBox(g, inputX, rY, 52, 15, targetItemCountBanh.ToString(), isGreenText: true);
 
-			rY += 18;
+			rY += 21;
 			DrawCheckbox(g, labelX, rY, enableRoutingBanh, "Rẽ nhánh khi xong ->");
 			DrawInputBox(g, inputX, rY, 52, 15, GetTabName(routeTargetTabBanh) + "(" + routeTargetTabBanh + ")", isGreenText: true);
 
 			string activeConds = "";
-			if (stopBanhCond1) activeConds += (activeConds.Length > 0 ? "+" : "") + "1";
-			if (stopBanhCond2) activeConds += (activeConds.Length > 0 ? "+" : "") + "2";
+			if (stopBanhCond2) activeConds += "2";
 			if (stopBanhCond3) activeConds += (activeConds.Length > 0 ? "+" : "") + "3";
 			string statusBanh = isUsingAllBanh
-				? "Đang tự động dùng hết bánh trong rương..."
+				? "Đang tự dùng 1 lần Bánh trong rương..."
 				: ("Đã mua: " + completedBatchesBanh + " đợt | ĐK dừng: " + activeConds);
-			mFont.tahoma_7_yellow.drawString(g, statusBanh, headerCenterX, winY + 175, mFont.CENTER);
+			mFont.tahoma_7_yellow.drawString(g, statusBanh, headerCenterX, winY + 178, mFont.CENTER);
 		}
 
-		// === NỘI DUNG TAB 2: HN ===
+		// === NỘI DUNG TAB 2: BOX HỒNG NGỌC SSS ===
 		if (selectedTab == 2)
 		{
 			int rY = winY + 50;
-			mFont.tahoma_7b_white.drawString(g, targetItemNameHn + " [" + targetItemIdHn + "] - NPC 56", labelX, rY, mFont.LEFT);
+			mFont.tahoma_7b_white.drawString(g, targetItemNameHn + " [" + targetItemIdHn + "]", labelX, rY, mFont.LEFT);
 			mFont.tahoma_7_yellow.drawString(g, "Rương: " + GetBagItemCount(targetItemIdHn), inputX + 50, rY - 2, mFont.RIGHT);
 			mFont.tahoma_7_green.drawString(g, "Zeno: " + FormatShortNumber(GetBagItemCount(ZenoItemId)), inputX + 50, rY + 7, mFont.RIGHT);
 
@@ -3173,29 +3714,25 @@ public class AutoGop : IChatable
 			mFont.tahoma_7_white.drawString(g, "Số lượng / đợt:", labelX, rY + 1, mFont.LEFT);
 			DrawInputBox(g, inputX, rY, 52, 15, batchQtyHn.ToString(), isGreenText: true);
 
-			rY += 17;
+			rY += 18;
 			mFont.tahoma_7_white.drawString(g, "Số đợt cần mua:", labelX, rY + 1, mFont.LEFT);
 			DrawInputBox(g, inputX, rY, 52, 15, targetBatchesHn.ToString(), isGreenText: true);
 
-			rY += 17;
+			rY += 18;
 			mFont.tahoma_7_white.drawString(g, "Độ trễ mỗi đợt:", labelX, rY + 1, mFont.LEFT);
 			DrawInputBox(g, inputX, rY, 52, 15, delayBuyHnMs + " ms", isGreenText: false);
 
+			rY += 19;
+			DrawRadio(g, labelX, rY, stopConditionHn == 1, "ĐK 1: Đủ số đợt mua");
+
 			rY += 18;
-			DrawRadio(g, labelX, rY, stopConditionHn == 1, "ĐK 1: Đủ đợt");
-			DrawRadio(g, winX + 110, rY, stopConditionHn == 2, "ĐK 2: Đầy/Hết");
+			DrawRadio(g, labelX, rY, stopConditionHn == 3, "ĐK 3: Zeno < " + FormatShortNumber(GetZenoRequiredHn()) + " (SL x 40K)");
 
-			rY += 17;
-			DrawCheckbox(g, labelX, rY, stopHnCond3, "ĐK 3: Zeno < " + FormatShortNumber(GetZenoRequiredHn()) + " (SL x 40K)");
-
-			rY += 17;
-			DrawCheckbox(g, labelX, rY, autoUseHn, "Vừa mua vừa dùng (" + targetItemIdHn + ")");
-
-			rY += 17;
+			rY += 19;
 			DrawCheckbox(g, labelX, rY, enableRoutingHn, "Rẽ nhánh khi xong ->");
 			DrawInputBox(g, inputX, rY, 52, 15, GetTabName(routeTargetTabHn) + "(" + routeTargetTabHn + ")", isGreenText: true);
 
-			mFont.tahoma_7_yellow.drawString(g, "Đã mua: " + completedBatchesHn + " đợt | ĐK dừng: Cách " + stopConditionHn + (stopHnCond3 ? "+3" : ""), headerCenterX, winY + 186, mFont.CENTER);
+			mFont.tahoma_7_yellow.drawString(g, "Đã mua: " + completedBatchesHn + " đợt | Chế độ: ĐK " + stopConditionHn + " (NPC 56)", headerCenterX, winY + 182, mFont.CENTER);
 		}
 
 		// === NỘI DUNG TAB 3: ĐIỂM ===
@@ -3257,7 +3794,8 @@ public class AutoGop : IChatable
 			DrawInputBox(g, inputX, rY, 52, 15, GetTabName(routeTargetTabDiem) + "(" + routeTargetTabDiem + ")", isGreenText: true);
 
 			string mocStatus = autoSelectMocDiem ? ("Tự động [" + MocShortNames[pointIndex] + "]") : MocFullNames[pointIndex];
-			mFont.tahoma_7_yellow.drawString(g, "Đã đổi: " + completedBatchesDiem + " lượt | Mốc: " + mocStatus, headerCenterX, winY + 175, mFont.CENTER);
+			string ackSuffix = pendingDiemAck ? " (Chờ xác nhận)" : "";
+			mFont.tahoma_7_yellow.drawString(g, "Đã đổi: " + completedBatchesDiem + " lượt | Mốc: " + mocStatus + ackSuffix, headerCenterX, winY + 175, mFont.CENTER);
 		}
 
 		// === NỘI DUNG TAB 4: ZENO ===
@@ -3287,7 +3825,12 @@ public class AutoGop : IChatable
 			DrawCheckbox(g, labelX, rY, enableRouteLackZeno, "Nhánh 2 (Vé < " + batchQtyZeno + ") ->");
 			DrawInputBox(g, inputX, rY, 52, 15, GetTabName(routeTargetWhenLackZeno) + "(" + routeTargetWhenLackZeno + ")", isGreenText: true);
 
-			mFont.tahoma_7_yellow.drawString(g, "Đã đổi: " + completedBatchesZeno + " đợt (Tích chọn để bật/tắt nhánh)", headerCenterX, winY + 175, mFont.CENTER);
+			string zenoFooter = isRunning && currentRunningTab == 4
+				? ("Đã đổi: " + completedBatchesZeno + " đợt [" + zenoState + "]")
+				: (lastZenoEndCode != ZenoEndCode.None
+					? ("Đã đổi: " + completedBatchesZeno + " | " + lastZenoEndCode)
+					: ("Đứng sẵn Map 5 Karin | Đổi: " + completedBatchesZeno + " đợt"));
+			mFont.tahoma_7_yellow.drawString(g, zenoFooter, headerCenterX, winY + 175, mFont.CENTER);
 		}
 
 		// 2 Nút bấm đáy

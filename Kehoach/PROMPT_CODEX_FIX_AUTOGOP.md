@@ -1,0 +1,36 @@
+# PROMPT CHO CODEX — UPDATE AUTO GỘP + FIX ZENO (KHÔNG XMAP)
+
+Bạn đang chỉnh repo `hungdzx1/nro_mod`. Đọc kỹ `AGENTS.md`, `Kehoach/autogop.md`, `Kehoach/autogop_update.md` và đặc tả cập nhật `autogop_update_v2.md` đính kèm trước khi thay đổi bất cứ code nào. **Mục tiêu là triển khai các comment `### SỬA/ UPDATE ###` cùng việc sửa Auto đổi Tiên Phù Zeno. Đặc biệt: bỏ hẳn XMap tự động đối với Tab 4 Zeno**, kể cả cơ chế quay lại map cũ sinh ra bởi Zeno. Không làm hỏng tab 1/2/3, mod khác hay giao thức gốc.
+
+## Tài liệu đối chiếu bắt buộc
+
+- Backup `Backup_Snapshot_20261112_144724.zip`: xem `DecompiledSource/Game1.Mod/AutoGop.cs` khoảng dòng 487–502 (StartTab Zeno), 682–708 (hai cấp menu), 719–827 (gói nhập -125) và bản Game2. Backup đã có luồng menu Zeno đơn giản từng hoạt động, **nhưng chưa hoàn thiện**: không copy đè toàn bộ file, không sao chép lỗi đếm thành công ngay khi gửi request, retry thiếu bao quát, hoặc gửi một trường nhập khi server yêu cầu nhiều trường.
+- Game nguyên bản `PC_V2.rar`: `ProjCompleted_Data/Managed/Assembly-CSharp.dll` là thư viện **chưa mod**. Dùng công cụ phân tích .NET / IL để đối chiếu chính xác phương thức, packet và kiểu tham số của `Service`, `Controller`, `Controller2`, `GameCanvas`, `GameScr`/menu. **Không** copy DLL gốc lên bản mod. DLL này không chứa `AutoGop`; việc thiếu auto trong bản gốc là bình thường.
+- Repo chính: các file `DecompiledSource/Game1.Mod/AutoGop.cs`, `Game2.Mod/AutoGop.cs`; kiểm tra trước khi sửa xem hook cần cập nhật ở `Controller.cs`, `GameScr.cs`, `Game1.Assets.src.f/Controller2.cs`, và Game2 tương ứng. Kiểm tra pipeline `MyMod/build_mod.ps1` (hiện build `DecompiledSource/Assembly-CSharp.csproj`), không sửa nhầm file bản sao `MyMod/AutoGop/AutoGop.cs` nếu file đó không nằm trong pipeline.
+
+## Việc 1 — Cập nhật cấu hình và UI đúng file MD
+
+1. **Bánh / Tab 1**: `delayBuyBanhMs = 600` mặc định. Bỏ hoàn toàn tùy chọn dừng `ĐK1: đủ số đợt` khỏi UI và điều kiện kết thúc. Giữ ĐK2/ĐK3. Khi đạt mốc Bánh `targetItemCountBanh`, chỉ **gửi một lệnh dùng** item ID `1337` thay vì spam theo `delayUseBanhMs=200`; chờ server cập nhật để xác minh, không nhận vơ đã dùng sạch khi vẫn còn Bánh. Giữ xử lý hết tài nguyên và routing sang Điểm.
+2. **HN / Tab 2**: tên hiển thị **BOX HỒNG NGỌC SSS**, ID `1581`, `delayBuyHnMs = 600`; xóa checkbox `autoUseHn` và không tự gọi `UseItemInBag(1581)`. Bỏ ĐK2 khỏi UI; chỉ chọn **một** điều kiện dừng: ĐK1 đủ đợt hoặc ĐK3 Zeno thiếu `< batchQtyHn × 40000` (dùng `long`). Lỗi thực sự đầy túi/thiếu tài nguyên vẫn dừng an toàn dù chọn chế độ nào.
+3. **Điểm / Tab 3**: mặc định `autoSelectMocDiem = false`, `targetBatchesDiem = 1`. Để số 1 có tác dụng, mặc định chọn chế độ dừng `stopConditionDiem = 1`; vẫn cho phép người dùng chọn chế độ dừng do hết điểm. Giữ 5 mốc và routing.
+4. Không bỏ các phím F3/F4/F5/F6/F7/F8, F6/A emergency stop, các route khác. Mọi thay đổi giao diện phải đồng bộ setter/default/hiển thị, không để ô và checkbox vô hiệu.
+
+## Việc 2 — Sửa Zeno theo nguyên nhân thực tế, tuyệt đối không XMap
+
+1. Trên Tab Zeno, **không được gọi** `StartXmapToNpc(4,46,18)`, `XmapController.StartRunToMapId(46)`, không đổi map hoặc tự nhảy từ Đảo Kame tới Karin; không sử dụng `stepState=7` cho Zeno. Cũng không còn quy trình "trở về map cũ do Zeno". Nếu nhân vật chưa ở `TileMap.mapID==46` hoặc NPC 18 chưa sẵn sàng, F8 dừng Zeno với thông báo cụ thể; F3 dừng/tạm dừng workflow báo cần đến Karin thủ công. **Không** kích hoạt nhánh thiếu vé trong lỗi map. Không ảnh hưởng XMap độc lập của các tính năng khác.
+2. Khi ở đúng map và đủ vé `1583`, kiểm tra NPC 18 hiện diện và nhân vật thật sự ở tầm tương tác; focus NPC đúng trước khi `openMenu(18)`. Không thay trực tiếp tọa độ `cx/cy` kết hợp gửi `charMove()` tức thời như cách teleport giả nếu server chưa đồng bộ; cần xác nhận tương tác hợp lệ.
+3. Theo dõi menu thật từ server. So sánh luồng backup 2 cấp: menu `Đổi Tiên Phù` → menu `Tiên Phù Zeno` → server hỏi nhập số lượng `-125`. Không tự dùng index 3/0 nếu caption thực tế không khớp. Xử lý đúng cả menu packet `32`, `33` (submenu `88820/88821`) và `27` bằng lệnh phù hợp `confirmMenu`, `menu`, `menuId`. Kiểm tra loại request bằng hành vi `GameCanvas` và `Service` gốc trong DLL. Không nuốt menu không thuộc NPC18.
+4. Điều chỉnh state machine để phân biệt `WAIT_MENU1`, `WAIT_MENU2`, `WAIT_INPUT`, `WAIT_ACK`. Hiện code có `MaybeResetZenoMenuStepIfMainMenu` có thể phân loại sai caption `Đổi Tiên Phù Zeno`; sửa theo dạng menu thật và context. Mọi lần nhận menu hợp lệ cập nhật `stateTimestamp`, timeout/retry; retry đúng lệnh đang chờ, không nhảy sang index khác hoặc gửi hai lần khi response trễ.
+5. Packet `-125` chỉ xử lý khi đúng Tab4 và state `WAIT_INPUT`/đúng sự kiện Zeno. Không `msg.reader()` rồi `return false` làm hỏng handler sau. Validate số lượng/số trường; không chèn `batchQtyZeno` vào **tất cả** input nếu server có field khác. Sử dụng API gửi input đúng bản game, không đọc tràn packet.
+6. **Không tăng `completedBatchesZeno` ngay sau gửi -125**. Phải đợi xác nhận thành công/biến động hành trang hợp lệ, invalidate cache vé trước khi kiểm tra. Thêm cờ giao dịch chờ để ngăn giao dịch trùng.
+7. Phân tách kết thúc: `DONE` → nhánh đủ đợt (mặc định HN); `LACK_TICKET` xác nhận số vé thật sự không đủ → nhánh thiếu vé (mặc định Bánh); `WRONG_MAP`, `MENU_TIMEOUT`, `INPUT_TIMEOUT`, `SERVER_REJECT` → dừng/tạm dừng với lý do chính xác, **không** gọi `FinishZenoLack` và **không** đếm thành công.
+8. `hideUi=true` chỉ ẩn giao diện; log/capture nội dung menu, yêu cầu nhập và thông báo server trước khi đóng UI. Test cả `hideUi=false`. F6 dừng sạch state/callback và packet Zeno muộn.
+
+## Việc 3 — Kiểm thử và giao kết quả
+
+- Trước sửa: lập bảng đối chiếu `BACKUP ↔ HIỆN TẠI ↔ DLL GỐC`, ít nhất các hàm `openMenu/confirmMenu/menu/menuId/sendClientInput`, `GameCanvas` menu action `88820/88821/88822`, `Controller` packet 32/33/27, `Controller2` packet -125. Tìm nguyên nhân có bằng chứng; nếu không có log runtime, ghi rõ là giả thuyết, bổ sung debug trước khi kết luận.
+- Sau sửa: test state/packet bằng simulation thực sự kiểm tra hàm điều khiển; không chỉ dùng text `.Contains`. Kiểm tra `F8` ở map 5 (không XMap), `F8` ở map 46 (menu 2 cấp và -125), menu đổi index, input không về, đủ vé nhưng server từ chối, vé thực sự thiếu, F6, `hideUi=true/false`, route F3 trên map 5, mặc định Bánh/HN/Điểm, và test hồi quy tab 1/2/3 ở Game1 + Game2.
+- Theo `AGENTS.md`, chỉ build sau khi các test tĩnh/tự động PASS. Sau đó kiểm thử game thực tế mới có thể xác nhận server chấp nhận giao dịch. Không tự sửa/ghi đè DLL gốc trong `PC_V2.rar`, không `reset --hard`, `push --force`, `clean -fdx` hay lệnh xóa dữ liệu.
+- Báo cáo cho tôi: danh sách file/dòng đổi, nguyên nhân lỗi Zeno (có bằng chứng), cách xử lý không XMap, ảnh hưởng F3 với các tab khác map, kết quả PASS/FAIL của từng test, kết quả build, vấn đề còn phải kiểm thử trong game. **Không tuyên bố hoàn thành nếu mới build mà chưa kiểm thử.**
+
+**Điều kiện thành công tối thiểu:** F8 khi đã đứng tại Karin với đủ vé mở đúng menu NPC 18, chọn đúng Tiên Phù Zeno, gửi số lượng khi nhận đúng gói `-125`, chỉ tính đổi sau khi thành công; khi ở Đảo Kame thì tuyệt đối không tự XMap và không báo thiếu vé giả; các tính năng Bánh/HN/Điểm khớp cập nhật đã nêu.

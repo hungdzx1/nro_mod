@@ -17,6 +17,7 @@ UnityCrashHandler64.exe
 *.zip
 *.7z
 Backup/
+_ref_orig/
 
 # Sensitive files
 .env*
@@ -31,3 +32,4 @@ Backup/
 *.suo
 Thumbs.db
 .DS_Store
+

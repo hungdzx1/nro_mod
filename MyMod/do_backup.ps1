@@ -25,6 +25,10 @@ $files = @(
     'Game2.Mod\AutoMuaNhieu.cs',
     'Game1.Mod\NpcMenuHelper.cs',
     'Game2.Mod\NpcMenuHelper.cs',
+    'Game1.Mod.XMAP\XmapData.cs',
+    'Game2.Mod.XMAP\XmapData.cs',
+    'Game1.Mod.XMAP\XmapController.cs',
+    'Game2.Mod.XMAP\XmapController.cs',
     'Assembly-CSharp.csproj'
 )
 
