@@ -67,11 +67,11 @@ public class AutoGop : IChatable
 
 	public int targetBatchesBanh = 50; // 0 = vô hạn
 
-	public int delayBuyBanhMs = 200;
+	public int delayBuyBanhMs = 600;
 
-	public int stopConditionBanh = 1; // 1: Đủ số lần HOẶC hết tài nguyên/hành trang đầy. 2: Số bánh trong rương đạt mốc
+	public int stopConditionBanh = 2; // 1: Đủ số lần HOẶC hết tài nguyên/hành trang đầy. 2: Số bánh trong rương đạt mốc
 
-	public int targetItemCountBanh = 5000; // Mốc số bánh trong rương cho Cách 2
+	public int targetItemCountBanh = 2000000; // Mốc số bánh trong rương cho Cách 2
 
 	public int delayUseBanhMs = 200; // Delay khi dùng bánh
 
@@ -88,9 +88,9 @@ public class AutoGop : IChatable
 
 	public int batchQtyHn = 1000;
 
-	public int targetBatchesHn = 50; // 0 = vô hạn
+	public int targetBatchesHn = 0; // 0 = vô hạn
 
-	public int delayBuyHnMs = 200;
+	public int delayBuyHnMs = 600;
 
 	public bool autoUseHn = true; // Vừa mua vừa dùng vật phẩm
 
@@ -102,12 +102,14 @@ public class AutoGop : IChatable
 
 	public int routeTargetTabHn = 4; // Nhảy sang Tab Zeno (ID 4)
 
+	public int routeDelayHnMs = 500; // Delay khi chuyển từ HN sang Zeno
+
 	public int completedBatchesHn;
 
 	// === TAB 3: ĐIỂM (NPC ID: 66) ===
-	public int pointIndex = 1; // 0: 10Tr, 1: 5K, 2: 3K, 3: 200, 4: 50
+	public int pointIndex = 0; // 0: 10Tr, 1: 5K, 2: 3K, 3: 200, 4: 50
 
-	public int targetBatchesDiem = 50; // 0 = vô hạn
+	public int targetBatchesDiem = 1; // 0 = vô hạn
 
 	public int delayDiemMs = 350;
 
@@ -134,10 +136,16 @@ public class AutoGop : IChatable
 
 	public int routeTargetWhenLackZeno = 1; // Nhánh 2: Thiếu vé (< 19.800) -> Nhảy sang Tab Bánh (1)
 
+	public int routeDelayZenoMs = 500; // Delay khi chuyển từ Zeno sang Bánh/HN
+
 	public int completedBatchesZeno;
 
 	// === ENGINE STATE ===
-	private int stepState; // 0: Idle, 1: Approach & Open, 2: WaitMenu, 3: WaitShop, 4: WaitInput, 5: Cooldown, 6: TransitionDelay
+	private int stepState; // 0: Idle, 1: Approach & Open, 2: WaitMenu, 3: WaitShop, 4: WaitInput, 5: Cooldown, 6: TransitionDelay, 7: LocalRouteDelay
+
+	private int pendingRouteTab;
+
+	private int pendingRouteDelayMs;
 
 	private long stateTimestamp;
 
@@ -514,7 +522,7 @@ public class AutoGop : IChatable
 			{
 				queueIndex = idx;
 			}
-			StartTab(targetTab);
+			ScheduleLocalRoute(targetTab, currentRunningTab);
 		}
 		else
 		{
@@ -524,8 +532,18 @@ public class AutoGop : IChatable
 				StopAll("Dừng: Rẽ nhánh lặp quá số lần cho phép");
 				return;
 			}
-			StartTab(targetTab);
+			ScheduleLocalRoute(targetTab, currentRunningTab);
 		}
+	}
+
+	private void ScheduleLocalRoute(int targetTab, int sourceTab)
+	{
+		int delayToUse = (sourceTab == 2) ? routeDelayHnMs : ((sourceTab == 4) ? routeDelayZenoMs : delayBetweenTabsMs);
+		pendingRouteTab = targetTab;
+		pendingRouteDelayMs = delayToUse;
+		currentRunningTab = 0;
+		stepState = 7;
+		stateTimestamp = mSystem.currentTimeMillis();
 	}
 
 	public void StartTab(int tabId)
@@ -646,6 +664,8 @@ public class AutoGop : IChatable
 		isRunningWorkflow = false;
 		currentRunningTab = 0;
 		stepState = 0;
+		pendingRouteTab = 0;
+		pendingRouteDelayMs = 0;
 		isUsingAllBanh = false;
 		progressThisLoop = false;
 		routeHopCount = 0;
@@ -1120,6 +1140,20 @@ public class AutoGop : IChatable
 			return;
 		}
 
+		// Chờ delay rẽ nhánh HN -> Zeno hoặc Zeno -> Bánh/HN
+		if (stepState == 7)
+		{
+			if (now - stateTimestamp >= pendingRouteDelayMs)
+			{
+				int nextTab = pendingRouteTab;
+				pendingRouteTab = 0;
+				stepState = 1;
+				stateTimestamp = now;
+				StartTab(nextTab);
+			}
+			return;
+		}
+
 		// Xử lý cơ chế dùng hết bánh ở Tab 1
 		if (currentRunningTab == 1 && isUsingAllBanh)
 		{
@@ -1290,6 +1324,7 @@ public class AutoGop : IChatable
 			case 22: targetBatchesHn = System.Math.Max(0, val); break;
 			case 23: delayBuyHnMs = System.Math.Max(50, val); break;
 			case 24: routeTargetTabHn = System.Math.Max(0, System.Math.Min(4, val)); break;
+			case 25: routeDelayHnMs = System.Math.Max(50, val); break;
 			// Tab 3 Điểm
 			case 31: targetBatchesDiem = System.Math.Max(0, val); break;
 			case 32: delayDiemMs = System.Math.Max(50, val); break;
@@ -1299,6 +1334,7 @@ public class AutoGop : IChatable
 			case 43: delayZenoMs = System.Math.Max(50, val); break;
 			case 44: routeTargetWhenDoneZeno = System.Math.Max(0, System.Math.Min(4, val)); break;
 			case 45: routeTargetWhenLackZeno = System.Math.Max(0, System.Math.Min(4, val)); break;
+			case 46: routeDelayZenoMs = System.Math.Max(50, val); break;
 			}
 		}
 		onCancelChat();
@@ -1489,7 +1525,7 @@ public class AutoGop : IChatable
 			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 16))
 			{
 				GameCanvas.clearAllPointerEvent();
-				OpenInputField(13, "Độ trễ mỗi đợt mua (ms)", "200");
+				OpenInputField(13, "Độ trễ mỗi đợt mua (ms)", "600");
 				return;
 			}
 			// Cách 1: Đủ số lần mua
@@ -1519,7 +1555,7 @@ public class AutoGop : IChatable
 			{
 				stopConditionBanh = 2;
 				GameCanvas.clearAllPointerEvent();
-				OpenInputField(14, "Mốc bánh trong rương cần đạt", "5000");
+				OpenInputField(14, "Mốc bánh trong rương cần đạt", "2000000");
 				return;
 			}
 		}
@@ -1548,7 +1584,7 @@ public class AutoGop : IChatable
 			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 16))
 			{
 				GameCanvas.clearAllPointerEvent();
-				OpenInputField(22, "Số đợt cần mua", "50");
+				OpenInputField(22, "Số đợt cần mua", "0");
 				return;
 			}
 			// Delay
@@ -1556,7 +1592,7 @@ public class AutoGop : IChatable
 			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 16))
 			{
 				GameCanvas.clearAllPointerEvent();
-				OpenInputField(23, "Độ trễ mỗi đợt (ms)", "200");
+				OpenInputField(23, "Độ trễ mỗi đợt (ms)", "600");
 				return;
 			}
 			// Checkbox vừa mua vừa dùng
@@ -1581,6 +1617,14 @@ public class AutoGop : IChatable
 				OpenInputField(24, "Tab nhảy sang khi rẽ nhánh (1-4)", "4");
 				return;
 			}
+
+			rY += 19;
+			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 16))
+			{
+				GameCanvas.clearAllPointerEvent();
+				OpenInputField(25, "Delay chuyển tab HN -> Zeno (ms)", "500");
+				return;
+			}
 		}
 
 		// === TAB 3: ĐIỂM ===
@@ -1603,7 +1647,7 @@ public class AutoGop : IChatable
 			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 16))
 			{
 				GameCanvas.clearAllPointerEvent();
-				OpenInputField(31, "Số lượt cần đổi (0 = vô hạn)", "50");
+				OpenInputField(31, "Số lượt cần đổi (0 = vô hạn)", "1");
 				return;
 			}
 			// Delay
@@ -1671,6 +1715,14 @@ public class AutoGop : IChatable
 			{
 				GameCanvas.clearAllPointerEvent();
 				OpenInputField(45, "Tab khi thiếu vé (VD: 1 là Bánh)", "1");
+				return;
+			}
+
+			rY += 18;
+			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 16))
+			{
+				GameCanvas.clearAllPointerEvent();
+				OpenInputField(46, "Delay chuyển tab Zeno -> Bánh/HN (ms)", "500");
 				return;
 			}
 		}
@@ -1891,6 +1943,10 @@ public class AutoGop : IChatable
 			mFont.tahoma_7_yellow.drawString(g, "Tab:", inputX - 25, rY + 1, mFont.LEFT);
 			DrawInputBox(g, inputX, rY, 52, 16, GetTabName(routeTargetTabHn) + "(" + routeTargetTabHn + ")", isGreenText: true);
 
+			rY += 19;
+			mFont.tahoma_7_white.drawString(g, "Delay chuyển Zeno:", labelX, rY + 2, mFont.LEFT);
+			DrawInputBox(g, inputX, rY, 52, 16, routeDelayHnMs + " ms", isGreenText: false);
+
 			mFont.tahoma_7_white.drawString(g, "(Rẽ nhánh Tab HN có ưu tiên cao hơn Tab Chung)", headerCenterX, winY + 181, mFont.CENTER);
 		}
 
@@ -1972,6 +2028,10 @@ public class AutoGop : IChatable
 			rY += 18;
 			mFont.tahoma_7_white.drawString(g, "Nhánh 2 (Vé < " + batchQtyZeno + ") ->", labelX, rY + 2, mFont.LEFT);
 			DrawInputBox(g, inputX, rY, 52, 16, GetTabName(routeTargetWhenLackZeno) + "(" + routeTargetWhenLackZeno + ")", isGreenText: true);
+
+			rY += 18;
+			mFont.tahoma_7_white.drawString(g, "Delay chuyển tab:", labelX, rY + 2, mFont.LEFT);
+			DrawInputBox(g, inputX, rY, 52, 16, routeDelayZenoMs + " ms", isGreenText: false);
 
 			mFont.tahoma_7_yellow.drawString(g, "(Chạy song song 2 nhánh: Đạt mục tiêu / Thiếu vé)", headerCenterX, winY + 181, mFont.CENTER);
 		}

@@ -21,10 +21,16 @@ $files = @(
     'Game2.Assets.src.f\Controller2.cs',
     'Game1.Mod\AutoGop.cs',
     'Game2.Mod\AutoGop.cs',
+    'Game1.Mod\AutoGiaoDich.cs',
+    'Game2.Mod\AutoGiaoDich.cs',
+    'Game1.Mod\AutoDungNhanh.cs',
+    'Game2.Mod\AutoDungNhanh.cs',
     'Game1.Mod\AutoMuaNhieu.cs',
     'Game2.Mod\AutoMuaNhieu.cs',
     'Game1.Mod\NpcMenuHelper.cs',
     'Game2.Mod\NpcMenuHelper.cs',
+    'Game1\ServerListScreen.cs',
+    'Game2\ServerListScreen.cs',
     'Assembly-CSharp.csproj'
 )
 

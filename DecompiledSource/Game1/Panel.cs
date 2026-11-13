@@ -8859,6 +8859,10 @@ public class Panel : IActionListener, IChatable
 								myVector.addElement(new Command(ModFunc.strAddAutoItem, ModFunc.GI(), 500, currItem));
 							}
 						}
+						if (!currItem.isTypeBody() && (isnewInventory ? (newSelected != 0) : (!GetInventorySelect_isbody(selected, newSelected, Char.myCharz().arrItemBody))))
+						{
+							myVector.addElement(new Command(Game1.Mod.AutoDungNhanh.gI().IsItemAdded(currItem.template.id) ? "Tắt auto\ndùng nhanh" : "Auto\ndùng nhanh", Game1.Mod.AutoDungNhanh.gI(), 1, currItem));
+						}
 					}
 					if (position == 1)
 					{

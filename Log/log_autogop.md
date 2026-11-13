@@ -56,3 +56,46 @@
 - **Build mod (`MyMod/build_mod.ps1`):** Thành công (`0 Error(s)`, không có warning nào trong `AutoGop.cs` hoặc `Controller.cs`), đã cập nhật `ProjCompleted_Data/Managed/Assembly-CSharp.dll` (`1,758,208` bytes).
 - **Sao lưu snapshot (`MyMod/do_backup.ps1`):** Thành công, đã tạo `Backup/Backup_Snapshot_20261113_173523.zip` (`2,022,299` bytes).
 
+---
+
+## Cập nhật [14/11/2026 03:03 (+07)] — Đổi giá trị mặc định các Tab trong `AutoGop`
+- **Phạm vi:** Chỉ thay đổi giá trị khởi tạo mặc định và chuỗi gợi ý (`OpenInputField` placeholder) tương ứng trong `DecompiledSource/Game1.Mod/AutoGop.cs`, `DecompiledSource/Game2.Mod/AutoGop.cs` và các bản mirror `MyMod/AutoGop_Game1.cs`, `MyMod/AutoGop_Game2.cs`, `MyMod/AutoGop/AutoGop.cs`. **Không thay đổi bất kỳ logic xử lý nào.**
+- **Các giá trị mặc định đã đổi:**
+  - **Tab Bánh:**
+    - `delayBuyBanhMs`: `200` -> `600` (giữ nguyên `delayUseBanhMs = 200`, placeholder `"600"` tại L1492).
+    - `stopConditionBanh`: `1` -> `2` (chọn sẵn Điều kiện 2: đạt mốc rương).
+    - `targetItemCountBanh`: `5000` -> `2000000` (placeholder `"2000000"` tại L1522).
+  - **Tab HN:**
+    - `targetBatchesHn`: `50` -> `0` (`0 = vô hạn`, placeholder `"0"` tại L1551).
+    - `delayBuyHnMs`: `200` -> `600` (placeholder `"600"` tại L1559).
+  - **Tab Điểm:**
+    - `pointIndex`: `1` (`5K`) -> `0` (`10Tr` / `10M`).
+    - `targetBatchesDiem`: `50` -> `1` (placeholder `"1"` tại L1606).
+- **Kiểm thử & Biên dịch sau cập nhật:**
+  - **Kiểm thử C# (`AutoGop144724Tests`, bổ sung ca `T19_DefaultValues_And_Placeholders`):**
+    - `Game1`: **19/19 PASSED, 0 FAILED** (`0 Warning(s), 0 Error(s)`).
+    - `Game2`: **19/19 PASSED, 0 FAILED** (`0 Warning(s), 0 Error(s)`).
+  - **Build mod (`MyMod/build_mod.ps1`):** `0 Error(s)`, `0` cảnh báo trong `AutoGop.cs`, cập nhật `ProjCompleted_Data/Managed/Assembly-CSharp.dll` (`1,775,616` bytes, `11/14/2026 3:02:56 AM`).
+  - **Ghi chú:** Không chạy `do_backup.ps1` và giữ nguyên `Log/log_version.md` theo yêu cầu hiện tại.
+
+
+---
+
+## Cập nhật [14/11/2026 03:37 (+07)] — Bổ sung delay `500ms` & ô chỉnh sửa khi rẽ nhánh `HN -> Zeno` và `Zeno -> Bánh/HN` trong `AutoGop`
+- **Phạm vi:** Chỉ bổ sung độ trễ chuyển tab cục bộ và hai ô nhập liệu tương ứng trên Tab HN & Tab Zeno trong `DecompiledSource/Game1.Mod/AutoGop.cs`, `DecompiledSource/Game2.Mod/AutoGop.cs` cùng các bản mirror `MyMod/AutoGop_Game1.cs`, `MyMod/AutoGop_Game2.cs`, `MyMod/AutoGop/AutoGop.cs`. Không thay đổi kích thước cửa sổ (`winW = 224, winH = 258`), không sửa `FinishOneWorkflowLoop()` (quay lại `workflowQueue[0]` vẫn dùng `delayBetweenTabsMs`), và không đụng các logic gốc khác.
+- **Chi tiết thay đổi:**
+  - **Tab HN (Tab 2):**
+    - Thêm `routeDelayHnMs = 500;` (mặc định `500 ms`).
+    - Trong `Paint()` & `UpdateTouch()`: thêm dòng `"Delay chuyển Zeno:"` kèm ô nhập hiển thị `routeDelayHnMs + " ms"` (gọi `OpenInputField(25, "Delay chuyển tab HN -> Zeno (ms)", "500")`, nhập tối thiểu `50 ms` qua `case 25` trong `onChatFromMe`).
+  - **Tab Zeno (Tab 4):**
+    - Thêm `routeDelayZenoMs = 500;` (mặc định `500 ms`).
+    - Trong `Paint()` & `UpdateTouch()`: thêm dòng `"Delay chuyển tab:"` kèm ô nhập hiển thị `routeDelayZenoMs + " ms"` (gọi `OpenInputField(46, "Delay chuyển tab Zeno -> Bánh/HN (ms)", "500")`, nhập tối thiểu `50 ms` qua `case 46` trong `onChatFromMe`).
+  - **Máy trạng thái rẽ nhánh cục bộ:**
+    - Bổ sung `stepState = 7` (`LocalRouteDelay`), `pendingRouteTab`, `pendingRouteDelayMs` và `ScheduleLocalRoute(int targetTab, int sourceTab)` để chờ đúng `routeDelayHnMs` (khi từ HN) hoặc `routeDelayZenoMs` (khi từ Zeno Nhánh 1 / Nhánh 2) trước khi gọi `StartTab(nextTab)`.
+    - Khi ở `stepState = 7`, đặt `currentRunningTab = 0` để gói tin trễ từ tab cũ không kích hoạt rẽ nhánh lại; `Update()` xử lý chờ ở `if (stepState == 7)` và `StopAll(...)` reset sạch `pendingRouteTab = 0; pendingRouteDelayMs = 0;`.
+- **Kiểm thử & Biên dịch sau cập nhật:**
+  - **Kiểm thử C# (`AutoGop144724Tests`, bổ sung `T20_LocalRouteDelay_500ms_And_EditableBoxes`):**
+    - `Game1`: **20/20 PASSED, 0 FAILED** (`0 Warning(s), 0 Error(s)`).
+    - `Game2`: **20/20 PASSED, 0 FAILED** (`0 Warning(s), 0 Error(s)`).
+  - **Build mod (`MyMod/build_mod.ps1`):** `0 Error(s)`, `0` cảnh báo trong `AutoGop.cs` (`246 Warning(s)` sẵn có của mã gốc), cập nhật `ProjCompleted_Data/Managed/Assembly-CSharp.dll` (`1,777,152` bytes, `2026-11-14 03:36:58`).
+  - **Ghi chú:** Không chạy `do_backup.ps1` và không chỉnh sửa `Log/log_version.md` theo yêu cầu.

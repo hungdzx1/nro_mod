@@ -749,6 +749,8 @@ public class ServerListScreen : mScreen, IActionListener
 		}
 		Char.isLoadingMap = false;
 		ModFunc.startAutoItem = false;
+		Game2.Mod.AutoDungNhanh.gI().OnDisconnectOrReset();
+		Game2.Mod.AutoGiaoDich.gI().OnDisconnectOrReset();
 		mSystem.resetCurInapp();
 		base.switchToMe();
 	}

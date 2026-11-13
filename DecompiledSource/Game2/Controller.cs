@@ -673,7 +673,10 @@ public class Controller : IMessageHandler
 				if (b13 == 0)
 				{
 					int playerID = msg.reader().readInt();
-					GameScr.gI().giaodich(playerID);
+					if (!Game2.Mod.AutoGiaoDich.gI().OnReceiveInvite(playerID))
+					{
+						GameScr.gI().giaodich(playerID);
+					}
 				}
 				if (b13 == 1)
 				{
@@ -683,9 +686,12 @@ public class Controller : IMessageHandler
 					{
 						return;
 					}
-					GameCanvas.panel.setTypeGiaoDich(char3);
-					GameCanvas.panel.show();
-					Service.gI().getPlayerMenu(num37);
+					if (!Game2.Mod.AutoGiaoDich.gI().OnTradeOpened(num37))
+					{
+						GameCanvas.panel.setTypeGiaoDich(char3);
+						GameCanvas.panel.show();
+						Service.gI().getPlayerMenu(num37);
+					}
 				}
 				if (b13 == 2)
 				{
@@ -699,18 +705,23 @@ public class Controller : IMessageHandler
 							break;
 						}
 					}
+					Game2.Mod.AutoGiaoDich.gI().OnMyItemRemoved(b14);
 				}
 				if (b13 == 6)
 				{
-					GameCanvas.panel.isFriendLock = true;
-					if (GameCanvas.panel2 != null)
+					bool flagSuppressTradeUi = Game2.Mod.AutoGiaoDich.gI().ShouldSuppressPanelUi();
+					if (!flagSuppressTradeUi)
 					{
-						GameCanvas.panel2.isFriendLock = true;
-					}
-					GameCanvas.panel.vFriendGD.removeAllElements();
-					if (GameCanvas.panel2 != null)
-					{
-						GameCanvas.panel2.vFriendGD.removeAllElements();
+						GameCanvas.panel.isFriendLock = true;
+						if (GameCanvas.panel2 != null)
+						{
+							GameCanvas.panel2.isFriendLock = true;
+						}
+						GameCanvas.panel.vFriendGD.removeAllElements();
+						if (GameCanvas.panel2 != null)
+						{
+							GameCanvas.panel2.vFriendGD.removeAllElements();
+						}
 					}
 					int friendMoneyGD = msg.reader().readInt();
 					sbyte b15 = msg.reader().readByte();
@@ -727,40 +738,47 @@ public class Controller : IMessageHandler
 							{
 								int num42 = msg.reader().readShort();
 								int param2 = msg.reader().readInt();
-								if (num42 != -1)
+								if (!flagSuppressTradeUi && num42 != -1)
 								{
 									item2.itemOption[num41] = new ItemOption(num42, param2);
 									item2.compare = GameCanvas.panel.getCompare(item2);
 								}
 							}
 						}
+						if (!flagSuppressTradeUi)
+						{
+							if (GameCanvas.panel2 != null)
+							{
+								GameCanvas.panel2.vFriendGD.addElement(item2);
+							}
+							else
+							{
+								GameCanvas.panel.vFriendGD.addElement(item2);
+							}
+						}
+					}
+					if (!flagSuppressTradeUi)
+					{
 						if (GameCanvas.panel2 != null)
 						{
-							GameCanvas.panel2.vFriendGD.addElement(item2);
+							GameCanvas.panel2.setTabGiaoDich(isMe: false);
+							GameCanvas.panel2.friendMoneyGD = friendMoneyGD;
 						}
 						else
 						{
-							GameCanvas.panel.vFriendGD.addElement(item2);
+							GameCanvas.panel.friendMoneyGD = friendMoneyGD;
+							if (GameCanvas.panel.currentTabIndex == 2)
+							{
+								GameCanvas.panel.setTabGiaoDich(isMe: false);
+							}
 						}
 					}
-					if (GameCanvas.panel2 != null)
-					{
-						GameCanvas.panel2.setTabGiaoDich(isMe: false);
-						GameCanvas.panel2.friendMoneyGD = friendMoneyGD;
-					}
-					else
-					{
-						GameCanvas.panel.friendMoneyGD = friendMoneyGD;
-						if (GameCanvas.panel.currentTabIndex == 2)
-						{
-							GameCanvas.panel.setTabGiaoDich(isMe: false);
-						}
-					}
+					Game2.Mod.AutoGiaoDich.gI().OnFriendLocked();
 				}
 				if (b13 == 7)
 				{
 					InfoDlg.hide();
-					if (GameCanvas.panel.isShow)
+					if (!Game2.Mod.AutoGiaoDich.gI().OnTradeClosed() && GameCanvas.panel.isShow)
 					{
 						GameCanvas.panel.hide();
 					}
@@ -2435,6 +2453,7 @@ public class Controller : IMessageHandler
 						Char.myCharz().arrItemBag[b25] = null;
 					}
 				}
+				Game2.Mod.AutoGiaoDich.gI().OnBagUpdated();
 				break;
 			}
 			case -35:

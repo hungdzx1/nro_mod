@@ -586,8 +586,14 @@ public class ModFunc : IActionListener
 			OpenMenu();
 			return true;
 		case 122:
-			UseQuickItem();
+		{
+			MyVector myVector = new MyVector();
+			myVector.addElement(new Command("Auto nhanh", Game1.Mod.AutoDungNhanh.gI(), 100, null));
+			myVector.addElement(new Command("Bật/Tắt auto nhanh", Game1.Mod.AutoDungNhanh.gI(), 101, null));
+			myVector.addElement(new Command("GD nhanh", Game1.Mod.AutoGiaoDich.gI(), 100, null));
+			GameCanvas.menu.startAt(myVector, 0);
 			return true;
+		}
 		case 113:
 			UseQuickItem();
 			return true;
@@ -1316,6 +1322,8 @@ public class ModFunc : IActionListener
 		AutoMuaNhieu.gI().Update();
 		AutoGop.gI().Update();
 		NpcMenuHelper.gI().Update();
+		Game1.Mod.AutoDungNhanh.gI().Update();
+		Game1.Mod.AutoGiaoDich.gI().Update();
 		ShowBoss.UpdateNotifications();
 		long num = mSystem.currentTimeMillis();
 		if (num - lastTimeKeepAlive >= 300000)
@@ -1614,6 +1622,8 @@ public class ModFunc : IActionListener
 		AutoMuaNhieu.gI().Paint(g);
 		AutoGop.gI().Paint(g);
 		NpcMenuHelper.gI().Paint(g);
+		Game1.Mod.AutoDungNhanh.gI().Paint(g);
+		Game1.Mod.AutoGiaoDich.gI().Paint(g);
 		int num3 = 52;
 		if (notifBoss)
 		{
