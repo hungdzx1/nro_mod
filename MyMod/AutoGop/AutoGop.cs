@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using UnityEngine;
@@ -20,10 +20,6 @@ public class AutoGop : IChatable
 	public int currentRunningTab; // Tab đang thực thi: 1 (Bánh), 2 (HN), 3 (Điểm), 4 (Zeno)
 
 	public bool hideUi = true; // Ẩn hoàn toàn giao diện NPC / ô nhập khi chạy
-
-	public bool hidePlayersAndMobs = true; // [v] Ẩn người & quái khi auto
-
-	public bool hideFlyInfoMessages = true; // [v] Tắt thông báo chữ bay khi auto
 
 	// === TAB 0: CHUNG ===
 	public bool enableBanh = true;
@@ -48,9 +44,13 @@ public class AutoGop : IChatable
 
 	public int delayBetweenTabsMs = 500;
 
-	public int targetWorkflowLoops; // 0 = vô hạn
+	public int targetWorkflowLoops = 0; // 0 = vô hạn
 
 	public int completedWorkflowLoops;
+
+	private bool progressThisLoop;
+
+	private int routeHopCount;
 
 	private List<int> workflowQueue = new List<int>();
 
@@ -69,19 +69,11 @@ public class AutoGop : IChatable
 
 	public int delayBuyBanhMs = 200;
 
-	public bool stopBanhCond1; // ĐK 1: Đủ số đợt mua
+	public int stopConditionBanh = 1; // 1: Đủ số lần HOẶC hết tài nguyên/hành trang đầy. 2: Số bánh trong rương đạt mốc
 
-	public bool stopBanhCond2 = true; // ĐK 2: Đầy rương / Hết tài nguyên
-
-	public bool stopBanhCond3 = true; // ĐK 3: Đạt mốc bánh trong rương -> Tự dùng hết
-
-	public int targetItemCountBanh = 5000; // Mốc số bánh trong rương cho ĐK 3
+	public int targetItemCountBanh = 5000; // Mốc số bánh trong rương cho Cách 2
 
 	public int delayUseBanhMs = 200; // Delay khi dùng bánh
-
-	public bool enableRoutingBanh; // Mặc định tắt (false)
-
-	public int routeTargetTabBanh = 3; // Mặc định chuyển sang Tab Điểm (3)
 
 	public int completedBatchesBanh;
 
@@ -106,41 +98,22 @@ public class AutoGop : IChatable
 
 	public bool enableRoutingHn = true; // Bật tính năng chuyển hướng cục bộ
 
-	public int routeWhenConditionHn = 2; // Rẽ nhánh khi thỏa mãn ĐK
+	public int routeWhenConditionHn = 2; // Rẽ nhánh khi thỏa mãn ĐK 2 (Hết tài nguyên / đầy)
 
 	public int routeTargetTabHn = 4; // Nhảy sang Tab Zeno (ID 4)
 
 	public int completedBatchesHn;
 
-	public bool stopHnCond3 = true; // ĐK 3: Zeno trong rương < Số lượng/đợt x 40K
-
-	public const int ZenoItemId = 1378; // Vật phẩm Zeno dùng để mua HN
-
-	public const long ZenoPerHn = 40000L; // Giá 1 HN = 40.000 Zeno
-
-	// === CHỐNG ĐỆ QUY THÔNG BÁO (Fix đơ game) ===
-	private bool suppressInfoHook;
-
-	private bool inServerInfo;
-
-	private bool progressThisLoop; // Có mua/đổi được gì trong vòng hiện tại không
-
 	// === TAB 3: ĐIỂM (NPC ID: 66) ===
 	public int pointIndex = 1; // 0: 10Tr, 1: 5K, 2: 3K, 3: 200, 4: 50
-
-	public bool autoSelectMocDiem = true; // Tự động hạ mốc từ cao xuống thấp (10Tr -> 5K -> 3K)
 
 	public int targetBatchesDiem = 50; // 0 = vô hạn
 
 	public int delayDiemMs = 350;
 
-	public int stopConditionDiem = 2; // 1: Đổi đủ số lượt, 2: Đầy rương / Hết điểm (< Mốc)
+	public int stopConditionDiem = 1; // 1: Đổi đủ số lượng. 2: Điểm hiện có < Điểm tối thiểu
 
-	public bool enableRoutingDiem; // Bật/tắt rẽ nhánh khi xong Tab Điểm
-
-	public int routeTargetTabDiem = 4; // Mặc định chuyển sang Tab Zeno (4)
-
-	public int currentDiemPoints = -1; // Điểm hiện có cập nhật Real-time từ lời thoại Menu 1 của NPC 66
+	public long currentDiemPoints = -1; // Điểm hiện có cập nhật Real-time từ lời thoại Menu 1 NPC 66
 
 	public int completedBatchesDiem;
 
@@ -157,11 +130,7 @@ public class AutoGop : IChatable
 
 	public int delayZenoMs = 350;
 
-	public bool enableRouteDoneZeno = true; // Bật/tắt Nhánh 1 (Đạt mục tiêu)
-
 	public int routeTargetWhenDoneZeno = 2; // Nhánh 1: Đổi đủ mục tiêu -> Nhảy sang Tab HN (2)
-
-	public bool enableRouteLackZeno = true; // Bật/tắt Nhánh 2 (Thiếu vé < 19.800)
 
 	public int routeTargetWhenLackZeno = 1; // Nhánh 2: Thiếu vé (< 19.800) -> Nhảy sang Tab Bánh (1)
 
@@ -176,17 +145,15 @@ public class AutoGop : IChatable
 
 	private int retryCount;
 
-	private int npcRetryCount;
-
 	private int editFieldMode;
 
 	private int winX = -1;
 
 	private int winY = -1;
 
-	private readonly int winW = 228;
+	private readonly int winW = 224;
 
-	private readonly int winH = 250;
+	private readonly int winH = 258;
 
 	private bool isDragging;
 
@@ -236,23 +203,8 @@ public class AutoGop : IChatable
 	}
 
 	// === TIỆN ÍCH HÀNH TRANG & NPC ===
-	private static long lastBagCheckTime;
-	private static readonly Dictionary<int, int> cachedBagCounts = new Dictionary<int, int>();
-
 	public static int GetBagItemCount(int itemId)
 	{
-		long now = mSystem.currentTimeMillis();
-		if (now - lastBagCheckTime < 100 && cachedBagCounts.ContainsKey(itemId))
-		{
-			return cachedBagCounts[itemId];
-		}
-
-		if (now - lastBagCheckTime >= 100)
-		{
-			cachedBagCounts.Clear();
-			lastBagCheckTime = now;
-		}
-
 		if (Char.myCharz() == null || Char.myCharz().arrItemBag == null)
 		{
 			return 0;
@@ -266,141 +218,7 @@ public class AutoGop : IChatable
 				count += System.Math.Max(1, item.quantity);
 			}
 		}
-		cachedBagCounts[itemId] = count;
 		return count;
-	}
-
-	// Gửi thông báo nội bộ mà KHÔNG kích hoạt lại OnServerInfo (tránh đệ quy vô hạn gây đơ game)
-	private void Notify(string s)
-	{
-		bool prev = suppressInfoHook;
-		suppressInfoHook = true;
-		try
-		{
-			GameScr.info1.addInfo(s, 0);
-		}
-		finally
-		{
-			suppressInfoHook = prev;
-		}
-	}
-
-	public static string FormatShortNumber(long v)
-	{
-		if (v >= 1000000000L)
-		{
-			return (v / 1000000000.0).ToString("0.##") + "B";
-		}
-		if (v >= 1000000L)
-		{
-			return (v / 1000000.0).ToString("0.##") + "M";
-		}
-		if (v >= 1000L)
-		{
-			return (v / 1000.0).ToString("0.##") + "K";
-		}
-		return v.ToString();
-	}
-
-	public long GetHongNgoc()
-	{
-		return (Char.myCharz() != null) ? Char.myCharz().luongKhoa : 0;
-	}
-
-	public long GetZenoRequiredHn()
-	{
-		return (long)batchQtyHn * ZenoPerHn;
-	}
-
-	// ĐK 3 Tab HN: Zeno < Số lượng/đợt x 40K
-	private bool CheckHnZenoLack()
-	{
-		if (!stopHnCond3)
-		{
-			return false;
-		}
-		int zeno = GetBagItemCount(ZenoItemId);
-		long need = GetZenoRequiredHn();
-		if (zeno < need)
-		{
-			FinishTabHn("Zeno (" + FormatShortNumber(zeno) + ") < " + FormatShortNumber(need) + " (ĐK 3)");
-			return true;
-		}
-		return false;
-	}
-
-	public static int GetEmptyBagSlots()
-	{
-		if (Char.myCharz() == null || Char.myCharz().arrItemBag == null)
-		{
-			return 0;
-		}
-		int empty = 0;
-		for (int i = 0; i < Char.myCharz().arrItemBag.Length; i++)
-		{
-			if (Char.myCharz().arrItemBag[i] == null)
-			{
-				empty++;
-			}
-		}
-		return empty;
-	}
-
-	public static bool CanItemBeStackedInBag(int itemId)
-	{
-		if (Char.myCharz() == null || Char.myCharz().arrItemBag == null)
-		{
-			return false;
-		}
-		for (int i = 0; i < Char.myCharz().arrItemBag.Length; i++)
-		{
-			Item item = Char.myCharz().arrItemBag[i];
-			if (item != null && item.template != null && item.template.id == itemId && item.template.isUpToUp && item.quantity < 99)
-			{
-				return true;
-			}
-		}
-		return false;
-	}
-
-	public static int GetBagItemCountByIcon(int iconId)
-	{
-		if (Char.myCharz() == null || Char.myCharz().arrItemBag == null)
-		{
-			return 0;
-		}
-		int count = 0;
-		for (int i = 0; i < Char.myCharz().arrItemBag.Length; i++)
-		{
-			Item item = Char.myCharz().arrItemBag[i];
-			if (item != null && item.template != null && item.template.iconID == iconId)
-			{
-				count += System.Math.Max(1, item.quantity);
-			}
-		}
-		return count;
-	}
-
-	public static void SendClientInputDirect(string text)
-	{
-		Message message = null;
-		try
-		{
-			message = new Message(-125);
-			message.writer().writeByte(1);
-			message.writer().writeUTF(text);
-			Session_ME.gI().sendMessage(message);
-		}
-		catch (Exception)
-		{
-		}
-		finally
-		{
-			if (message != null)
-			{
-				message.cleanup();
-			}
-		}
 	}
 
 	public static bool UseItemInBag(int itemId)
@@ -468,7 +286,7 @@ public class AutoGop : IChatable
 				}
 			}
 			targetBuyTypeBanh = buyType;
-			Notify("Đã chọn cho [Tab Bánh]: " + targetItemNameBanh + " [ID: " + targetItemIdBanh + "]");
+			GameScr.info1.addInfo("Đã chọn cho [Tab Bánh]: " + targetItemNameBanh + " [ID: " + targetItemIdBanh + "]", 0);
 		}
 	}
 
@@ -491,7 +309,7 @@ public class AutoGop : IChatable
 				}
 			}
 			targetBuyTypeHn = buyType;
-			Notify("Đã chọn cho [Tab HN]: " + targetItemNameHn + " [ID: " + targetItemIdHn + "]");
+			GameScr.info1.addInfo("Đã chọn cho [Tab HN]: " + targetItemNameHn + " [ID: " + targetItemIdHn + "]", 0);
 		}
 	}
 
@@ -519,51 +337,27 @@ public class AutoGop : IChatable
 		return null;
 	}
 
-	public Item FindShopItemByName(string keyword)
-	{
-		if (Char.myCharz() == null || Char.myCharz().arrItemShop == null || string.IsNullOrEmpty(keyword))
-		{
-			return null;
-		}
-		string kw = keyword.ToLower();
-		for (int t = 0; t < Char.myCharz().arrItemShop.Length; t++)
-		{
-			if (Char.myCharz().arrItemShop[t] == null)
-			{
-				continue;
-			}
-			for (int i = 0; i < Char.myCharz().arrItemShop[t].Length; i++)
-			{
-				Item it = Char.myCharz().arrItemShop[t][i];
-				if (it != null && it.template != null && !string.IsNullOrEmpty(it.template.name) && it.template.name.ToLower().Contains(kw))
-				{
-					return it;
-				}
-			}
-		}
-		return null;
-	}
-
 	public void OnShopOpened(sbyte typeShop)
 	{
 		if (!isRunning)
 		{
 			return;
 		}
-		npcRetryCount = 0;
 		if (hideUi)
 		{
 			if (GameCanvas.panel != null && GameCanvas.panel.isShow)
 			{
-				GameCanvas.panel.isShow = false;
+				GameCanvas.panel.hideNow();
 			}
-			GameCanvas.panel2 = null;
+			if (GameCanvas.panel2 != null && GameCanvas.panel2.isShow)
+			{
+				GameCanvas.panel2.hideNow();
+			}
 		}
 
 		if (currentRunningTab == 1 || currentRunningTab == 2)
 		{
-			stepState = 3;
-			stateTimestamp = mSystem.currentTimeMillis();
+			TriggerBuyCurrentTab();
 		}
 	}
 
@@ -573,72 +367,22 @@ public class AutoGop : IChatable
 		{
 			return;
 		}
-		if (currentRunningTab == 2 && CheckHnZenoLack())
-		{
-			return;
-		}
 		int targetId = (currentRunningTab == 1) ? targetItemIdBanh : targetItemIdHn;
 		sbyte buyType = (currentRunningTab == 1) ? targetBuyTypeBanh : targetBuyTypeHn;
 		Item shopItem = FindShopItem(targetId);
-		if (shopItem == null)
-		{
-			string kw = (currentRunningTab == 1) ? "bánh" : "hồn";
-			shopItem = FindShopItemByName(kw);
-			if (shopItem != null && shopItem.template != null)
-			{
-				if (currentRunningTab == 1)
-				{
-					targetItemIdBanh = shopItem.template.id;
-					targetItemNameBanh = shopItem.template.name;
-				}
-				else
-				{
-					targetItemIdHn = shopItem.template.id;
-					targetItemNameHn = shopItem.template.name;
-				}
-				targetId = shopItem.template.id;
-				Notify("Tự nhận diện trong Shop: " + shopItem.template.name + " [" + targetId + "]");
-			}
-		}
-
 		if (shopItem != null && shopItem.template != null)
 		{
-			sbyte calcType = shopItem.isBuySpec ? ((sbyte)3) : ((shopItem.buyCoin > 0) ? ((sbyte)0) : ((sbyte)1));
 			if (currentRunningTab == 1)
 			{
 				targetItemNameBanh = shopItem.template.name;
-				targetBuyTypeBanh = calcType;
+				targetBuyTypeBanh = shopItem.isBuySpec ? ((sbyte)3) : ((shopItem.buyCoin > 0) ? ((sbyte)0) : ((sbyte)1));
 				buyType = targetBuyTypeBanh;
 			}
 			else
 			{
 				targetItemNameHn = shopItem.template.name;
-				targetBuyTypeHn = calcType;
+				targetBuyTypeHn = shopItem.isBuySpec ? ((sbyte)3) : ((shopItem.buyCoin > 0) ? ((sbyte)0) : ((sbyte)1));
 				buyType = targetBuyTypeHn;
-			}
-		}
-		else if (Char.myCharz() != null && Char.myCharz().arrItemShop != null && Char.myCharz().arrItemShop.Length > 0 && Char.myCharz().arrItemShop[0] != null && Char.myCharz().arrItemShop[0].Length > 0)
-		{
-			shopItem = Char.myCharz().arrItemShop[0][0];
-			if (shopItem != null && shopItem.template != null)
-			{
-				sbyte calcType = shopItem.isBuySpec ? ((sbyte)3) : ((shopItem.buyCoin > 0) ? ((sbyte)0) : ((sbyte)1));
-				if (currentRunningTab == 1)
-				{
-					targetItemIdBanh = shopItem.template.id;
-					targetItemNameBanh = shopItem.template.name;
-					targetBuyTypeBanh = calcType;
-					buyType = targetBuyTypeBanh;
-				}
-				else
-				{
-					targetItemIdHn = shopItem.template.id;
-					targetItemNameHn = shopItem.template.name;
-					targetBuyTypeHn = calcType;
-					buyType = targetBuyTypeHn;
-				}
-				targetId = shopItem.template.id;
-				Notify("Chọn vật phẩm đầu Shop: " + shopItem.template.name + " [" + targetId + "]");
 			}
 		}
 
@@ -646,82 +390,11 @@ public class AutoGop : IChatable
 		{
 			if (GameCanvas.panel != null && GameCanvas.panel.isShow)
 			{
-				GameCanvas.panel.isShow = false;
+				GameCanvas.panel.hideNow();
 			}
-			GameCanvas.panel2 = null;
-		}
-
-		// 1. Kiểm tra hành trang đầy
-		if (GetEmptyBagSlots() == 0 && !CanItemBeStackedInBag(targetId))
-		{
-			if (currentRunningTab == 1)
+			if (GameCanvas.panel2 != null && GameCanvas.panel2.isShow)
 			{
-				FinishTabBanh("Hành trang đã đầy");
-			}
-			else if (currentRunningTab == 2)
-			{
-				FinishTabHn("Hành trang đã đầy");
-			}
-			return;
-		}
-
-		// 2. Kiểm tra tài nguyên mua (Xu, Ngọc, Nguyên liệu đặc biệt)
-		if (shopItem != null)
-		{
-			// Kiểm tra Xu
-			if (shopItem.buyCoin > 0 && Char.myCharz() != null && Char.myCharz().xu < shopItem.buyCoin)
-			{
-				if (currentRunningTab == 1)
-				{
-					FinishTabBanh("Không đủ Xu để mua " + targetItemNameBanh);
-				}
-				else if (currentRunningTab == 2)
-				{
-					FinishTabHn("Không đủ Xu để mua " + targetItemNameHn);
-				}
-				return;
-			}
-
-			// Kiểm tra Ngọc
-			if (shopItem.buyGold > 0 && Char.myCharz() != null && (Char.myCharz().luong + Char.myCharz().luongKhoa) < shopItem.buyGold)
-			{
-				if (currentRunningTab == 1)
-				{
-					FinishTabBanh("Không đủ Ngọc để mua " + targetItemNameBanh);
-				}
-				else if (currentRunningTab == 2)
-				{
-					FinishTabHn("Không đủ Ngọc để mua " + targetItemNameHn);
-				}
-				return;
-			}
-
-			// Kiểm tra Nguyên liệu đặc biệt (iconSpec / buySpec)
-			if (shopItem.isBuySpec && shopItem.buySpec > 0 && shopItem.iconSpec > 0)
-			{
-				int currentSpecMaterial = GetBagItemCountByIcon(shopItem.iconSpec);
-				if (currentSpecMaterial < shopItem.buySpec)
-				{
-					// Nếu ở Tab Bánh và có chọn ĐK 3 (dùng hết bánh trong rương), kiểm tra xem trong rương còn bánh không
-					if (currentRunningTab == 1 && stopBanhCond3 && GetBagItemCount(targetItemIdBanh) > 0)
-					{
-						isUsingAllBanh = true;
-						stepState = 5;
-						stateTimestamp = mSystem.currentTimeMillis();
-						Notify("Hết NL mua -> Tự dùng hết " + targetItemNameBanh + " trong rương...");
-						return;
-					}
-
-					if (currentRunningTab == 1)
-					{
-						FinishTabBanh("Hết nguyên liệu mua " + targetItemNameBanh);
-					}
-					else if (currentRunningTab == 2)
-					{
-						FinishTabHn("Hết nguyên liệu mua " + targetItemNameHn);
-					}
-					return;
-				}
+				GameCanvas.panel2.hideNow();
 			}
 		}
 
@@ -748,17 +421,111 @@ public class AutoGop : IChatable
 
 		if (workflowQueue.Count == 0)
 		{
-			Notify("Chưa chọn chức năng nào trong Tab Chung!");
+			GameScr.info1.addInfo("Chưa chọn chức năng nào trong Tab Chung!", 0);
 			return;
 		}
 
 		isRunningWorkflow = true;
 		completedWorkflowLoops = 0;
 		progressThisLoop = false;
+		routeHopCount = 0;
 		queueIndex = 0;
 		string loopDesc = (targetWorkflowLoops == 0) ? "Vô hạn" : (targetWorkflowLoops + " vòng");
-		Notify("▶ BẮT ĐẦU QUY TRÌNH AUTO GỘP (" + loopDesc + ")");
+		GameScr.info1.addInfo("▶ BẮT ĐẦU QUY TRÌNH AUTO GỘP (" + loopDesc + ")", 0);
 		StartTab(workflowQueue[0]);
+	}
+
+	public void StartStandaloneTab(int tabId)
+	{
+		isRunningWorkflow = false;
+		routeHopCount = 0;
+		StartTab(tabId);
+	}
+
+	private void MarkLoopProgress()
+	{
+		progressThisLoop = true;
+		routeHopCount = 0;
+	}
+
+	private void FinishOneWorkflowLoop()
+	{
+		completedWorkflowLoops++;
+		if (!progressThisLoop)
+		{
+			StopAll("Dừng quy trình: Cả vòng không mua/đổi được gì (hết tài nguyên)");
+			return;
+		}
+		progressThisLoop = false;
+		routeHopCount = 0;
+
+		if (targetWorkflowLoops == 0 || completedWorkflowLoops < targetWorkflowLoops)
+		{
+			queueIndex = 0;
+			string loopInfo = (targetWorkflowLoops == 0)
+				? (completedWorkflowLoops + "/Vô hạn")
+				: (completedWorkflowLoops + "/" + targetWorkflowLoops);
+			GameScr.info1.addInfo("Xong vòng " + loopInfo + " -> Chờ " + delayBetweenTabsMs + "ms -> Lặp lại Tab " + GetTabName(workflowQueue[0]), 0);
+			stepState = 6;
+			stateTimestamp = mSystem.currentTimeMillis();
+		}
+		else
+		{
+			StopAll("ĐÃ HOÀN THÀNH " + completedWorkflowLoops + "/" + targetWorkflowLoops + " VÒNG QUY TRÌNH AUTO GỘP!");
+		}
+	}
+
+	private void HandleLocalRoute(int targetTab, string message)
+	{
+		if (!string.IsNullOrEmpty(message))
+		{
+			GameScr.info1.addInfo(message, 0);
+		}
+
+		if (targetTab == currentRunningTab)
+		{
+			OnTabCompleted(currentRunningTab, "Đích rẽ nhánh trùng tab hiện tại");
+			return;
+		}
+
+		if (isRunningWorkflow && workflowQueue.Count > 0)
+		{
+			// Nếu rẽ nhánh quay về tab đầu quy trình sau khi đã qua tab khác -> hoàn tất 1 vòng
+			if (workflowQueue.Count > 1 && targetTab == workflowQueue[0] && currentRunningTab != workflowQueue[0])
+			{
+				FinishOneWorkflowLoop();
+				return;
+			}
+
+			routeHopCount++;
+			if (routeHopCount > 8)
+			{
+				if (!progressThisLoop)
+				{
+					StopAll("Dừng quy trình: Rẽ nhánh lặp lại không phát sinh giao dịch");
+					return;
+				}
+				FinishOneWorkflowLoop();
+				return;
+			}
+
+			int idx = workflowQueue.IndexOf(targetTab);
+			if (idx >= 0)
+			{
+				queueIndex = idx;
+			}
+			StartTab(targetTab);
+		}
+		else
+		{
+			routeHopCount++;
+			if (routeHopCount > 8)
+			{
+				StopAll("Dừng: Rẽ nhánh lặp quá số lần cho phép");
+				return;
+			}
+			StartTab(targetTab);
+		}
 	}
 
 	public void StartTab(int tabId)
@@ -768,7 +535,6 @@ public class AutoGop : IChatable
 		stepState = 1;
 		stateTimestamp = mSystem.currentTimeMillis();
 		retryCount = 0;
-		npcRetryCount = 0;
 
 		if (GameCanvas.menu.showMenu)
 		{
@@ -779,9 +545,12 @@ public class AutoGop : IChatable
 		{
 			if (GameCanvas.panel != null && GameCanvas.panel.isShow)
 			{
-				GameCanvas.panel.isShow = false;
+				GameCanvas.panel.hideNow();
 			}
-			GameCanvas.panel2 = null;
+			if (GameCanvas.panel2 != null && GameCanvas.panel2.isShow)
+			{
+				GameCanvas.panel2.hideNow();
+			}
 		}
 
 		if ((tabId == 1 || tabId == 2) && autoChatMuaNhieu && !serverMuaNhieuEnabled)
@@ -795,41 +564,28 @@ public class AutoGop : IChatable
 		case 1:
 			completedBatchesBanh = 0;
 			isUsingAllBanh = false;
-			if (stopBanhCond3 && GetBagItemCount(targetItemIdBanh) >= targetItemCountBanh)
-			{
-				isUsingAllBanh = true;
-				stepState = 5;
-				stateTimestamp = mSystem.currentTimeMillis();
-				Notify(targetItemNameBanh + " đã đạt mốc " + targetItemCountBanh + " (ĐK 3) -> Tự dùng hết trong rương...");
-				break;
-			}
-			Notify("Bắt đầu [Tab Bánh]: Mua " + targetItemNameBanh + " [" + targetItemIdBanh + "] tại Goku (92)");
-			stepState = 1;
+			GameScr.info1.addInfo("Bắt đầu [Tab Bánh]: Mua " + targetItemNameBanh + " [" + targetItemIdBanh + "] tại Goku (92)", 0);
+			MoveCloseToNpc(92);
+			Service.gI().openMenu(92);
+			stepState = 2;
 			stateTimestamp = mSystem.currentTimeMillis();
 			break;
 
 		case 2:
 			completedBatchesHn = 0;
-			if (CheckHnZenoLack())
-			{
-				return;
-			}
-			Notify("Bắt đầu [Tab HN]: Mua " + targetItemNameHn + " [" + targetItemIdHn + "] tại NPC 56");
-			stepState = 1;
+			GameScr.info1.addInfo("Bắt đầu [Tab HN]: Mua " + targetItemNameHn + " [" + targetItemIdHn + "] tại NPC 56", 0);
+			MoveCloseToNpc(56);
+			Service.gI().openMenu(56);
+			stepState = 2;
 			stateTimestamp = mSystem.currentTimeMillis();
 			break;
 
 		case 3:
 			completedBatchesDiem = 0;
-			if (autoSelectMocDiem && currentDiemPoints >= 0)
-			{
-				if (currentDiemPoints >= RequiredPoints[0]) pointIndex = 0;
-				else if (currentDiemPoints >= RequiredPoints[1]) pointIndex = 1;
-				else if (currentDiemPoints >= RequiredPoints[2]) pointIndex = 2;
-			}
-			string mocStr = autoSelectMocDiem ? ("Tự động (" + MocShortNames[pointIndex] + ")") : MocShortNames[pointIndex];
-			Notify("Bắt đầu [Tab Điểm]: Đổi Nồi Bánh mốc " + mocStr);
-			stepState = 1;
+			GameScr.info1.addInfo("Bắt đầu [Tab Điểm]: Đổi Nồi Bánh mốc " + MocShortNames[pointIndex], 0);
+			MoveCloseToNpc(66);
+			Service.gI().openMenu(66);
+			stepState = 2;
 			stateTimestamp = mSystem.currentTimeMillis();
 			break;
 
@@ -839,85 +595,21 @@ public class AutoGop : IChatable
 			int zenoCount = GetBagItemCount(1583);
 			if (zenoCount < batchQtyZeno)
 			{
-				FinishZenoLack("Vé Zeno (" + zenoCount + ") < " + batchQtyZeno);
+				HandleLocalRoute(routeTargetWhenLackZeno, "Vé Zeno (" + zenoCount + ") < " + batchQtyZeno + " -> Rẽ nhánh sang Tab " + GetTabName(routeTargetWhenLackZeno));
 				return;
 			}
-			Notify("Bắt đầu [Tab Zeno]: Đổi " + batchQtyZeno + " Tiên Phù tại Karin (18)");
-			stepState = 1;
+			GameScr.info1.addInfo("Bắt đầu [Tab Zeno]: Đổi " + batchQtyZeno + " Tiên Phù tại Karin (18)", 0);
+			MoveCloseToNpc(18);
+			Service.gI().openMenu(18);
+			stepState = 2;
 			stateTimestamp = mSystem.currentTimeMillis();
 			break;
 		}
 	}
 
-	// === CÁC HÀM XỬ LÝ KẾT THÚC & RẼ NHÁNH TỪNG TAB ===
-	public void FinishTabBanh(string reason)
-	{
-		if (enableRoutingBanh && routeTargetTabBanh >= 1 && routeTargetTabBanh <= 4 && routeTargetTabBanh != 1)
-		{
-			Notify("Tab Bánh (" + reason + ") -> Chuyển sang Tab " + GetTabName(routeTargetTabBanh));
-			StartTab(routeTargetTabBanh);
-		}
-		else
-		{
-			OnTabCompleted(1, reason);
-		}
-	}
-
-	public void FinishTabHn(string reason)
-	{
-		if (enableRoutingHn && routeTargetTabHn >= 1 && routeTargetTabHn <= 4 && routeTargetTabHn != 2)
-		{
-			Notify("Tab HN (" + reason + ") -> Chuyển sang Tab " + GetTabName(routeTargetTabHn));
-			StartTab(routeTargetTabHn);
-		}
-		else
-		{
-			OnTabCompleted(2, reason);
-		}
-	}
-
-	public void FinishTabDiem(string reason)
-	{
-		if (enableRoutingDiem && routeTargetTabDiem >= 1 && routeTargetTabDiem <= 4 && routeTargetTabDiem != 3)
-		{
-			Notify("Tab Điểm (" + reason + ") -> Chuyển sang Tab " + GetTabName(routeTargetTabDiem));
-			StartTab(routeTargetTabDiem);
-		}
-		else
-		{
-			OnTabCompleted(3, reason);
-		}
-	}
-
-	public void FinishZenoDone(string reason)
-	{
-		if (enableRouteDoneZeno && routeTargetWhenDoneZeno >= 1 && routeTargetWhenDoneZeno <= 4 && routeTargetWhenDoneZeno != 4)
-		{
-			Notify("Zeno đạt mục tiêu -> Chuyển sang Tab " + GetTabName(routeTargetWhenDoneZeno));
-			StartTab(routeTargetWhenDoneZeno);
-		}
-		else
-		{
-			OnTabCompleted(4, reason);
-		}
-	}
-
-	public void FinishZenoLack(string reason)
-	{
-		if (enableRouteLackZeno && routeTargetWhenLackZeno >= 1 && routeTargetWhenLackZeno <= 4 && routeTargetWhenLackZeno != 4)
-		{
-			Notify(reason + " -> Chuyển sang Tab " + GetTabName(routeTargetWhenLackZeno));
-			StartTab(routeTargetWhenLackZeno);
-		}
-		else
-		{
-			OnTabCompleted(4, reason);
-		}
-	}
-
 	public void OnTabCompleted(int tabId, string reason)
 	{
-		Notify("Hoàn tất Tab " + GetTabName(tabId) + ": " + reason);
+		GameScr.info1.addInfo("Hoàn tất Tab " + GetTabName(tabId) + ": " + reason, 0);
 
 		if (!isRunningWorkflow)
 		{
@@ -938,33 +630,13 @@ public class AutoGop : IChatable
 		if (queueIndex < workflowQueue.Count)
 		{
 			int nextTab = workflowQueue[queueIndex];
-			Notify("Chờ " + delayBetweenTabsMs + "ms -> Chuyển sang Tab " + GetTabName(nextTab));
+			GameScr.info1.addInfo("Chờ " + delayBetweenTabsMs + "ms -> Chuyển sang Tab " + GetTabName(nextTab), 0);
 			stepState = 6; // Chờ delay chuyển giao
 			stateTimestamp = mSystem.currentTimeMillis();
 		}
 		else
 		{
-			completedWorkflowLoops++;
-			if (!progressThisLoop)
-			{
-				StopAll("■ Dừng: Cả vòng không mua/đổi được gì (hết tài nguyên toàn bộ)");
-				return;
-			}
-			progressThisLoop = false;
-			if (targetWorkflowLoops == 0 || completedWorkflowLoops < targetWorkflowLoops)
-			{
-				queueIndex = 0;
-				string loopInfo = (targetWorkflowLoops == 0)
-					? (completedWorkflowLoops + "/∞")
-					: (completedWorkflowLoops + "/" + targetWorkflowLoops);
-				Notify("Xong vòng " + loopInfo + " -> Lặp lại từ Tab " + GetTabName(workflowQueue[0]));
-				stepState = 6;
-				stateTimestamp = mSystem.currentTimeMillis();
-			}
-			else
-			{
-				StopAll("ĐÃ HOÀN THÀNH " + completedWorkflowLoops + "/" + targetWorkflowLoops + " VÒNG QUY TRÌNH AUTO GỘP!");
-			}
+			FinishOneWorkflowLoop();
 		}
 	}
 
@@ -975,8 +647,8 @@ public class AutoGop : IChatable
 		currentRunningTab = 0;
 		stepState = 0;
 		isUsingAllBanh = false;
-		retryCount = 0;
-		npcRetryCount = 0;
+		progressThisLoop = false;
+		routeHopCount = 0;
 		lastStopTimeMs = mSystem.currentTimeMillis();
 		if (GameCanvas.menu.showMenu)
 		{
@@ -985,7 +657,7 @@ public class AutoGop : IChatable
 		ChatTextField.gI().isShow = false;
 		if (!string.IsNullOrEmpty(reason))
 		{
-			Notify(reason);
+			GameScr.info1.addInfo(reason, 0);
 		}
 	}
 
@@ -997,23 +669,22 @@ public class AutoGop : IChatable
 			return;
 		}
 
-		// Nếu có danh sách menu đi kèm, kiểm tra xem đây là Menu 1 hay Menu 2
+		// Nếu có danh sách menu đi kèm, chỉ parse Menu cấp 1 (có "đổi điểm") và tuyệt đối bỏ qua Menu cấp 2 (chứa các mốc 10.000.000, 5.000, 3.000...)
 		if (menu != null)
 		{
 			bool isMenu1 = false;
 			for (int i = 0; i < menu.Length; i++)
 			{
-				if (menu[i] == null)
+				if (string.IsNullOrEmpty(menu[i]))
 				{
 					continue;
 				}
 				string m = menu[i].ToLower();
-				// Menu 2 chứa các mốc 10.000.000, 5.000, 3.000 -> tuyệt đối không parse lời thoại của Menu 2!
-				if (m.Contains("10.000.000") || m.Contains("5.000") || m.Contains("3.000"))
+				if (m.Contains("10.000.000") || m.Contains("10,000,000") || m.Contains("10tr") || m.Contains("5.000") || m.Contains("5,000") || m.Contains("3.000") || m.Contains("3,000"))
 				{
 					return;
 				}
-				if (m.Contains("đổi điểm") || m.Contains("thể lệ") || m.Contains("làm bánh"))
+				if (m.Contains("đổi điểm") || m.Contains("doi diem"))
 				{
 					isMenu1 = true;
 				}
@@ -1024,28 +695,29 @@ public class AutoGop : IChatable
 			}
 		}
 
-		string lowerText = text.ToLower();
-		// Chặn trường hợp lời thoại liệt kê danh sách các mốc điểm (10.000.000 ... 5.000 ...)
-		if (lowerText.Contains("10.000.000") && (lowerText.Contains("5.000") || lowerText.Contains("3.000")))
-		{
-			return;
-		}
-
 		try
 		{
-			Match match = Regex.Match(text, @"(?:đang có|hiện có|hiện tại|bạn có|số điểm|điểm của bạn|điểm sự kiện)[\s:là]*([0-9.,]+)", RegexOptions.IgnoreCase);
+			string cleanText = Regex.Replace(text, @"(?m)^\|-?\d+\|(?:-?\d+\|)?", "");
+			// Ưu tiên cụm từ chỉ rõ số dư điểm hiện có của người chơi
+			Match match = Regex.Match(cleanText, @"(?:đang có|hiện có|hiện tại|bạn có|số điểm|điểm của bạn|điểm sự kiện|điểm tích lũy|điểm bánh|điểm hiện có)(?:\s*(?:là|:))*\s*([0-9.,]+)", RegexOptions.IgnoreCase);
 			if (!match.Success)
 			{
-				match = Regex.Match(text, @"([0-9.,]+)\s*(?:điểm|diem)", RegexOptions.IgnoreCase);
+				string lowerText = cleanText.ToLower();
+				if ((lowerText.Contains("10.000.000") || lowerText.Contains("10,000,000")) &&
+					(lowerText.Contains("5.000") || lowerText.Contains("5,000") || lowerText.Contains("3.000") || lowerText.Contains("3,000")))
+				{
+					return;
+				}
+				match = Regex.Match(cleanText, @"([0-9.,]+)\s*(?:điểm|diem)", RegexOptions.IgnoreCase);
 			}
 			if (!match.Success)
 			{
-				match = Regex.Match(text, @"(?:điểm|diem|có|co)[\s:]*([0-9.,]+)", RegexOptions.IgnoreCase);
+				match = Regex.Match(cleanText, @"(?:điểm|diem|có|co)(?:\s*(?:là|:))*\s*([0-9.,]+)", RegexOptions.IgnoreCase);
 			}
 			if (match.Success)
 			{
 				string numStr = match.Groups[1].Value.Replace(".", "").Replace(",", "").Trim();
-				if (int.TryParse(numStr, out var pt))
+				if (long.TryParse(numStr, out var pt) && pt >= 0)
 				{
 					currentDiemPoints = pt;
 				}
@@ -1065,7 +737,7 @@ public class AutoGop : IChatable
 
 		int npcTempId = npc.template.npcTemplateId;
 
-		// Trích xuất điểm Real-time nếu là Menu 1 của Nồi Bánh (66)
+		// Trích xuất điểm Real-time nếu là Nồi Bánh (66)
 		if (npcTempId == 66 && !string.IsNullOrEmpty(chatText))
 		{
 			ParseDiemPoints(chatText, npcTempId, menu);
@@ -1076,11 +748,10 @@ public class AutoGop : IChatable
 			return false;
 		}
 
-		npcRetryCount = 0;
-
 		// === TAB 1: BÁNH (NPC 92) ===
 		if (currentRunningTab == 1 && npcTempId == 92)
 		{
+			// Mở Cửa hàng Sự Kiện (thường là option 0)
 			for (int i = 0; i < menu.Length; i++)
 			{
 				if (menu[i].ToLower().Contains("cửa hàng") || menu[i].ToLower().Contains("shop"))
@@ -1122,38 +793,11 @@ public class AutoGop : IChatable
 			bool isMenu1 = false;
 			for (int k = 0; k < menu.Length; k++)
 			{
-				if (menu[k] != null && menu[k].ToLower().Contains("đổi điểm"))
+				if (menu[k].ToLower().Contains("đổi điểm"))
 				{
 					isMenu1 = true;
 					break;
 				}
-			}
-
-			// Tự động chọn mốc từ cao xuống thấp (10Tr -> 5K -> 3K)
-			if (autoSelectMocDiem && currentDiemPoints >= 0)
-			{
-				if (currentDiemPoints >= RequiredPoints[0])
-				{
-					pointIndex = 0; // 10Tr
-				}
-				else if (currentDiemPoints >= RequiredPoints[1])
-				{
-					pointIndex = 1; // 5K
-				}
-				else if (currentDiemPoints >= RequiredPoints[2])
-				{
-					pointIndex = 2; // 3K
-				}
-			}
-
-			int minRequired = autoSelectMocDiem ? RequiredPoints[2] : RequiredPoints[pointIndex];
-
-			// Nếu điểm hiện có nhỏ hơn mốc tối thiểu cần đổi -> Dừng hoặc Rẽ nhánh ngay!
-			if (currentDiemPoints >= 0 && currentDiemPoints < minRequired)
-			{
-				string reqName = autoSelectMocDiem ? "3.000đ" : MocFullNames[pointIndex];
-				FinishTabDiem("Điểm (" + NinjaUtil.getMoneys(currentDiemPoints) + ") < " + reqName);
-				return hideUi;
 			}
 
 			if (isMenu1)
@@ -1165,33 +809,21 @@ public class AutoGop : IChatable
 			}
 			else
 			{
+				// Kiểm tra điều kiện Cách 2: Điểm hiện có < Điểm tối thiểu mốc chọn
+				if (stopConditionDiem == 2 && currentDiemPoints >= 0 && currentDiemPoints < RequiredPoints[pointIndex])
+				{
+					OnTabCompleted(3, "Số điểm hiện có (" + NinjaUtil.getMoneys(currentDiemPoints) + ") < Mốc " + MocShortNames[pointIndex]);
+					return hideUi;
+				}
+
 				int pick = (pointIndex >= 0 && pointIndex < menu.Length) ? pointIndex : 1;
 				completedBatchesDiem++;
-				progressThisLoop = true;
-				if (currentDiemPoints >= RequiredPoints[pick])
-				{
-					currentDiemPoints -= RequiredPoints[pick];
-				}
+				MarkLoopProgress();
 				Service.gI().confirmMenu(66, (sbyte)pick);
-
-				// Đánh giá lại mốc tự động sau khi trừ điểm
-				if (autoSelectMocDiem && currentDiemPoints >= 0)
-				{
-					if (currentDiemPoints >= RequiredPoints[0]) pointIndex = 0;
-					else if (currentDiemPoints >= RequiredPoints[1]) pointIndex = 1;
-					else if (currentDiemPoints >= RequiredPoints[2]) pointIndex = 2;
-				}
-
-				int nextMinRequired = autoSelectMocDiem ? RequiredPoints[2] : RequiredPoints[pointIndex];
 
 				if (stopConditionDiem == 1 && targetBatchesDiem > 0 && completedBatchesDiem >= targetBatchesDiem)
 				{
-					FinishTabDiem("Đã đổi đủ " + completedBatchesDiem + " lượt (" + MocShortNames[pick] + ")");
-				}
-				else if (stopConditionDiem == 2 && currentDiemPoints >= 0 && currentDiemPoints < nextMinRequired)
-				{
-					string reqName = autoSelectMocDiem ? "3.000đ" : MocFullNames[pointIndex];
-					FinishTabDiem("Hết điểm đổi (" + NinjaUtil.getMoneys(currentDiemPoints) + " < " + reqName + ")");
+					OnTabCompleted(3, "Đã đổi đủ " + completedBatchesDiem + " lượt (" + MocShortNames[pick] + ")");
 				}
 				else
 				{
@@ -1246,8 +878,6 @@ public class AutoGop : IChatable
 			return false;
 		}
 
-		npcRetryCount = 0;
-
 		// Gói -125 ClientInput khi Mua Bánh (1), Mua HN (2), hoặc Đổi Zeno (4)
 		if (currentRunningTab == 1 || currentRunningTab == 2 || currentRunningTab == 4)
 		{
@@ -1267,24 +897,26 @@ public class AutoGop : IChatable
 				else if (currentRunningTab == 2) qtyToSend = batchQtyHn;
 				else if (currentRunningTab == 4) qtyToSend = batchQtyZeno;
 
-				SendClientInputDirect(qtyToSend.ToString());
-				progressThisLoop = true;
+				TField tf = new TField();
+				tf.setText(qtyToSend.ToString());
+				Service.gI().sendClientInput(new TField[1] { tf });
 
 				if (currentRunningTab == 1)
 				{
 					completedBatchesBanh++;
+					MarkLoopProgress();
 					retryCount = 0;
-					// ĐK 3: Số bánh trong rương đạt mốc -> Tự dùng hết bánh trong rương
-					if (stopBanhCond3 && GetBagItemCount(targetItemIdBanh) >= targetItemCountBanh)
+					// Nếu Tab Bánh Cách 2: kiểm tra số lượng bánh trong rương
+					if (stopConditionBanh == 2 && GetBagItemCount(targetItemIdBanh) >= targetItemCountBanh)
 					{
 						isUsingAllBanh = true;
 						stepState = 5;
 						stateTimestamp = mSystem.currentTimeMillis();
-						Notify(targetItemNameBanh + " đạt mốc " + targetItemCountBanh + " (ĐK 3) -> Tự dùng hết trong rương...");
+						GameScr.info1.addInfo(targetItemNameBanh + " đạt mốc " + targetItemCountBanh + " -> Chuẩn bị dùng hết trong rương...", 0);
 					}
-					else if (stopBanhCond1 && targetBatchesBanh > 0 && completedBatchesBanh >= targetBatchesBanh)
+					else if (stopConditionBanh == 1 && targetBatchesBanh > 0 && completedBatchesBanh >= targetBatchesBanh)
 					{
-						FinishTabBanh("Đã mua đủ " + completedBatchesBanh + " đợt " + targetItemNameBanh + " (ĐK 1)");
+						OnTabCompleted(1, "Đã mua đủ " + completedBatchesBanh + " đợt " + targetItemNameBanh);
 					}
 					else
 					{
@@ -1295,6 +927,7 @@ public class AutoGop : IChatable
 				else if (currentRunningTab == 2)
 				{
 					completedBatchesHn++;
+					MarkLoopProgress();
 					retryCount = 0;
 					if (autoUseHn)
 					{
@@ -1303,7 +936,14 @@ public class AutoGop : IChatable
 
 					if (stopConditionHn == 1 && targetBatchesHn > 0 && completedBatchesHn >= targetBatchesHn)
 					{
-						FinishTabHn("Đã mua đủ " + completedBatchesHn + " đợt " + targetItemNameHn);
+						if (enableRoutingHn && routeWhenConditionHn == 1)
+						{
+							HandleLocalRoute(routeTargetTabHn, "Tab HN thỏa mãn ĐK 1 -> Rẽ nhánh sang Tab " + GetTabName(routeTargetTabHn));
+						}
+						else
+						{
+							OnTabCompleted(2, "Đã mua đủ " + completedBatchesHn + " đợt " + targetItemNameHn);
+						}
 					}
 					else
 					{
@@ -1314,12 +954,13 @@ public class AutoGop : IChatable
 				else if (currentRunningTab == 4)
 				{
 					completedBatchesZeno++;
-					Notify("Đã đổi " + qtyToSend + " Tiên Phù Zeno (Đợt " + completedBatchesZeno + ")");
+					MarkLoopProgress();
+					GameScr.info1.addInfo("Đã đổi " + qtyToSend + " Tiên Phù Zeno (Đợt " + completedBatchesZeno + ")", 0);
 
 					// Nhánh 1: Đạt mục tiêu chỉ định
 					if (targetBatchesZeno > 0 && completedBatchesZeno >= targetBatchesZeno)
 					{
-						FinishZenoDone("Đã đổi đủ " + completedBatchesZeno + " đợt Zeno");
+						HandleLocalRoute(routeTargetWhenDoneZeno, "Đã đổi đủ mục tiêu Zeno -> Rẽ nhánh sang Tab " + GetTabName(routeTargetWhenDoneZeno));
 					}
 					else
 					{
@@ -1327,7 +968,7 @@ public class AutoGop : IChatable
 						int currentTicket = GetBagItemCount(1583);
 						if (currentTicket < batchQtyZeno)
 						{
-							FinishZenoLack("Vé Zeno (" + currentTicket + ") < " + batchQtyZeno);
+							HandleLocalRoute(routeTargetWhenLackZeno, "Vé Zeno (" + currentTicket + ") < " + batchQtyZeno + " -> Rẽ nhánh sang Tab " + GetTabName(routeTargetWhenLackZeno));
 						}
 						else
 						{
@@ -1370,105 +1011,43 @@ public class AutoGop : IChatable
 			}
 		}
 
-		if (!isRunning || suppressInfoHook || inServerInfo)
+		if (!isRunning)
 		{
 			return;
 		}
 
-		bool narrowMatch = lower.Contains("hành trang đã đầy")
-			|| lower.Contains("hành trang đầy")
-			|| lower.Contains("rương đã đầy")
-			|| lower.Contains("chỗ trống")
-			|| lower.Contains("ô trống")
-			|| lower.Contains("không đủ")
-			|| lower.Contains("không có đủ")
-			|| lower.Contains("còn thiếu")
-			|| lower.Contains("hết điểm")
-			|| lower.Contains("hết vé");
+		bool isResourceEmptyOrBagFull = lower.Contains("hành trang đã đầy") || lower.Contains("chỗ trống") || lower.Contains("không đủ") || lower.Contains("còn thiếu") || lower.Contains("hết điểm") || lower.Contains("hết vé");
 
-		// Từ khóa mở rộng chỉ áp dụng khi đang chờ phản hồi mua (Bánh/HN) để tránh bắt nhầm
-		bool waitingBuy = (currentRunningTab == 1 || currentRunningTab == 2) && (stepState == 3 || stepState == 4);
-		bool wideMatch = waitingBuy && (lower.Contains("thiếu")
-			|| lower.Contains("cần có")
-			|| lower.Contains("cần thêm")
-			|| lower.Contains("không thể mua")
-			|| lower.Contains("thất bại")
-			|| lower.Contains("hết nguyên liệu")
-			|| lower.Contains("chưa có"));
-
-		bool isResourceEmptyOrBagFull = narrowMatch || wideMatch;
-
-		if (!isResourceEmptyOrBagFull)
-		{
-			return;
-		}
-
-		inServerInfo = true;
-		try
-		{
-			HandleResourceEmpty(s, lower);
-		}
-		finally
-		{
-			inServerInfo = false;
-		}
-	}
-
-	private void HandleResourceEmpty(string s, string lower)
-	{
-		bool isResourceEmptyOrBagFull = true;
 		if (isResourceEmptyOrBagFull)
 		{
-			if (hideUi)
+			if (currentRunningTab == 1 && stopConditionBanh == 1)
 			{
-				GameCanvas.endDlg();
-				if (GameCanvas.menu.showMenu)
-				{
-					GameCanvas.menu.doCloseMenu();
-				}
-			}
-
-			if (currentRunningTab == 1)
-			{
-				bool isBagFull = lower.Contains("hành trang đã đầy") || lower.Contains("hành trang đầy") || lower.Contains("rương đã đầy") || lower.Contains("chỗ trống") || lower.Contains("ô trống");
-				if (isUsingAllBanh)
-				{
-					// Nếu đang dùng bánh mà bị đầy rương (không thể dùng tiếp) -> hoàn tất/chuyển tab ngay
-					if (isBagFull)
-					{
-						isUsingAllBanh = false;
-						FinishTabBanh("Đầy rương khi đang dùng bánh (" + s + ")");
-					}
-				}
-				else if (stopBanhCond2)
-				{
-					// ĐK 2 được tích: Đầy rương hoặc Hết tài nguyên -> thực hiện dừng/chuyển tab ngay
-					FinishTabBanh("Đầy rương / Hết tài nguyên (" + s + ") (ĐK 2)");
-				}
-				else if (stopBanhCond3 && !isBagFull && GetBagItemCount(targetItemIdBanh) > 0)
-				{
-					// Chỉ tích ĐK 3 mà hết tài nguyên mua (rương chưa đầy, vẫn còn bánh) -> dùng hết số bánh đang có
-					isUsingAllBanh = true;
-					stepState = 5;
-					stateTimestamp = mSystem.currentTimeMillis();
-					Notify("Hết TN -> Tự dùng hết " + targetItemNameBanh + " trong rương...");
-				}
-				else
-				{
-					FinishTabBanh("Đầy rương / Hết tài nguyên (" + s + ")");
-				}
+				OnTabCompleted(1, "Hết tài nguyên hoặc hành trang đầy (" + s + ")");
 			}
 			else if (currentRunningTab == 2)
 			{
-				FinishTabHn("Đầy rương / Hết tài nguyên (" + s + ")");
+				// Tab HN: Điều kiện 2 (Hết tài nguyên / Đầy rương)
+				if (enableRoutingHn && routeWhenConditionHn == 2)
+				{
+					HandleLocalRoute(routeTargetTabHn, "Tab HN gặp lỗi/đầy rương -> Rẽ nhánh ưu tiên sang Tab " + GetTabName(routeTargetTabHn));
+				}
+				else if (stopConditionHn == 2)
+				{
+					OnTabCompleted(2, "Hết tài nguyên hoặc đầy rương (" + s + ")");
+				}
+				else
+				{
+					StopAll("Dừng Tab HN: " + s);
+				}
 			}
 			else if (currentRunningTab == 3)
 			{
-				FinishTabDiem("Đầy rương / Hết điểm (" + s + ")");
+				OnTabCompleted(3, "Dừng Tab Điểm: " + s);
 			}
 			else if (currentRunningTab == 4)
 			{
-				FinishZenoLack("Hết vé Zeno / Đầy rương (" + s + ")");
+				// Tab Zeno hết vé -> Kích hoạt Nhánh 2
+				HandleLocalRoute(routeTargetWhenLackZeno, "Hết vé Zeno -> Rẽ nhánh sang Tab " + GetTabName(routeTargetWhenLackZeno));
 			}
 		}
 	}
@@ -1484,11 +1063,11 @@ public class AutoGop : IChatable
 			}
 			else if (Input.GetKeyDown(KeyCode.F4))
 			{
-				StartTab(1);
+				StartStandaloneTab(1);
 			}
 			else if (Input.GetKeyDown(KeyCode.F5))
 			{
-				StartTab(2);
+				StartStandaloneTab(2);
 			}
 			else if (Input.GetKeyDown(KeyCode.F6) || (isRunning && Input.GetKey(KeyCode.A)))
 			{
@@ -1497,11 +1076,11 @@ public class AutoGop : IChatable
 			}
 			else if (Input.GetKeyDown(KeyCode.F7))
 			{
-				StartTab(3);
+				StartStandaloneTab(3);
 			}
 			else if (Input.GetKeyDown(KeyCode.F8))
 			{
-				StartTab(4);
+				StartStandaloneTab(4);
 			}
 		}
 
@@ -1519,26 +1098,15 @@ public class AutoGop : IChatable
 		{
 			if (GameCanvas.panel != null && GameCanvas.panel.isShow)
 			{
-				GameCanvas.panel.isShow = false;
+				GameCanvas.panel.hideNow();
 			}
-			GameCanvas.panel2 = null;
+			if (GameCanvas.panel2 != null && GameCanvas.panel2.isShow)
+			{
+				GameCanvas.panel2.hideNow();
+			}
 		}
 
 		long now = mSystem.currentTimeMillis();
-
-		// stepState == 1: Chuẩn bị di chuyển đến NPC và mở Menu
-		if (stepState == 1 && currentRunningTab >= 1 && currentRunningTab <= 4)
-		{
-			if (now - stateTimestamp >= 200)
-			{
-				stepState = 2;
-				stateTimestamp = now;
-				int npcId = (currentRunningTab == 1) ? 92 : ((currentRunningTab == 2) ? 56 : ((currentRunningTab == 3) ? 66 : 18));
-				MoveCloseToNpc(npcId);
-				Service.gI().openMenu(npcId);
-			}
-			return;
-		}
 
 		// Chờ delay chuyển tiếp giữa các Tab
 		if (stepState == 6)
@@ -1558,11 +1126,16 @@ public class AutoGop : IChatable
 			if (now - stateTimestamp >= delayUseBanhMs)
 			{
 				stateTimestamp = now;
-				if (!UseItemInBag(targetItemIdBanh))
+				if (UseItemInBag(targetItemIdBanh))
+				{
+					// Vẫn còn bánh, tiếp tục dùng
+					MarkLoopProgress();
+				}
+				else
 				{
 					// Đã dùng sạch bánh trong rương!
 					isUsingAllBanh = false;
-					FinishTabBanh("Đã dùng hết toàn bộ " + targetItemNameBanh + " trong rương");
+					OnTabCompleted(1, "Đã dùng hết toàn bộ " + targetItemNameBanh + " trong rương");
 				}
 			}
 			return;
@@ -1571,7 +1144,7 @@ public class AutoGop : IChatable
 		// stepState == 3: Chờ mở Shop và gửi lệnh Mua lần đầu
 		if (stepState == 3 && (currentRunningTab == 1 || currentRunningTab == 2))
 		{
-			if (now - stateTimestamp >= 200)
+			if (now - stateTimestamp >= 400)
 			{
 				TriggerBuyCurrentTab();
 			}
@@ -1579,37 +1152,23 @@ public class AutoGop : IChatable
 		}
 
 		// stepState == 4: Chờ gói -125 từ Server
-		if (stepState == 4)
+		if (stepState == 4 && (currentRunningTab == 1 || currentRunningTab == 2))
 		{
 			if (now - stateTimestamp >= 2500)
 			{
 				retryCount++;
-				if (retryCount <= 1)
+				if (retryCount <= 2)
 				{
-					if (currentRunningTab == 1 || currentRunningTab == 2)
-					{
-						TriggerBuyCurrentTab();
-					}
-					else if (currentRunningTab == 4)
-					{
-						Service.gI().confirmMenu(18, 0);
-					}
+					TriggerBuyCurrentTab();
 				}
 				else
 				{
 					retryCount = 0;
-					if (currentRunningTab == 1)
-					{
-						FinishTabBanh("Hết nguyên liệu / Server không gửi gói -125");
-					}
-					else if (currentRunningTab == 2)
-					{
-						FinishTabHn("Hết nguyên liệu / Server không gửi gói -125");
-					}
-					else if (currentRunningTab == 4)
-					{
-						FinishZenoLack("Hết vé Zeno / Server không gửi gói -125");
-					}
+					stepState = 1;
+					stateTimestamp = now;
+					int npcId = (currentRunningTab == 1) ? 92 : 56;
+					MoveCloseToNpc(npcId);
+					Service.gI().openMenu(npcId);
 				}
 			}
 			return;
@@ -1626,18 +1185,13 @@ public class AutoGop : IChatable
 				// Lặp lại đợt tiếp theo
 				if (currentRunningTab == 1)
 				{
-					// Kiểm tra lại mốc bánh rương cho ĐK 3 trước khi mua tiếp
-					if (stopBanhCond3 && GetBagItemCount(targetItemIdBanh) >= targetItemCountBanh)
-					{
-						isUsingAllBanh = true;
-						Notify(targetItemNameBanh + " đạt mốc " + targetItemCountBanh + " (ĐK 3) -> Tự dùng hết trong rương...");
-						return;
-					}
-					TriggerBuyCurrentTab();
+					Service.gI().buyItem(targetBuyTypeBanh, targetItemIdBanh, 0);
+					stepState = 4;
 				}
 				else if (currentRunningTab == 2)
 				{
-					TriggerBuyCurrentTab();
+					Service.gI().buyItem(targetBuyTypeHn, targetItemIdHn, 0);
+					stepState = 4;
 				}
 				else if (currentRunningTab == 3)
 				{
@@ -1650,7 +1204,7 @@ public class AutoGop : IChatable
 					int currentTicket = GetBagItemCount(1583);
 					if (currentTicket < batchQtyZeno)
 					{
-						FinishZenoLack("Vé Zeno (" + currentTicket + ") < " + batchQtyZeno);
+						HandleLocalRoute(routeTargetWhenLackZeno, "Vé Zeno (" + currentTicket + ") < " + batchQtyZeno + " -> Rẽ nhánh sang Tab " + GetTabName(routeTargetWhenLackZeno));
 						return;
 					}
 					MoveCloseToNpc(18);
@@ -1665,16 +1219,6 @@ public class AutoGop : IChatable
 		if ((stepState == 1 || stepState == 2) && now - stateTimestamp >= 3500)
 		{
 			stateTimestamp = now;
-			npcRetryCount++;
-			if (npcRetryCount > 2)
-			{
-				npcRetryCount = 0;
-				if (currentRunningTab == 1) FinishTabBanh("Không mở được NPC 92 (quá 3 lần)");
-				else if (currentRunningTab == 2) FinishTabHn("Không mở được NPC 56 (quá 3 lần)");
-				else if (currentRunningTab == 3) FinishTabDiem("Không mở được NPC 66 (quá 3 lần)");
-				else if (currentRunningTab == 4) FinishZenoLack("Không mở được NPC 18 (quá 3 lần)");
-				return;
-			}
 			stepState = 1;
 			if (currentRunningTab == 1)
 			{
@@ -1740,23 +1284,21 @@ public class AutoGop : IChatable
 			case 13: delayBuyBanhMs = System.Math.Max(50, val); break;
 			case 14: targetItemCountBanh = System.Math.Max(1, val); break;
 			case 15: delayUseBanhMs = System.Math.Max(50, val); break;
-			case 16: routeTargetTabBanh = System.Math.Max(1, System.Math.Min(4, val)); break;
 			// Tab 2 HN
 			case 20: targetItemIdHn = System.Math.Max(0, val); break;
 			case 21: batchQtyHn = System.Math.Max(1, System.Math.Min(1000, val)); break;
 			case 22: targetBatchesHn = System.Math.Max(0, val); break;
 			case 23: delayBuyHnMs = System.Math.Max(50, val); break;
-			case 24: routeTargetTabHn = System.Math.Max(1, System.Math.Min(4, val)); break;
+			case 24: routeTargetTabHn = System.Math.Max(0, System.Math.Min(4, val)); break;
 			// Tab 3 Điểm
 			case 31: targetBatchesDiem = System.Math.Max(0, val); break;
 			case 32: delayDiemMs = System.Math.Max(50, val); break;
-			case 33: routeTargetTabDiem = System.Math.Max(1, System.Math.Min(4, val)); break;
 			// Tab 4 Zeno
 			case 41: batchQtyZeno = System.Math.Max(1, val); break;
 			case 42: targetBatchesZeno = System.Math.Max(0, val); break;
 			case 43: delayZenoMs = System.Math.Max(50, val); break;
-			case 44: routeTargetWhenDoneZeno = System.Math.Max(1, System.Math.Min(4, val)); break;
-			case 45: routeTargetWhenLackZeno = System.Math.Max(1, System.Math.Min(4, val)); break;
+			case 44: routeTargetWhenDoneZeno = System.Math.Max(0, System.Math.Min(4, val)); break;
+			case 45: routeTargetWhenLackZeno = System.Math.Max(0, System.Math.Min(4, val)); break;
 			}
 		}
 		onCancelChat();
@@ -1816,7 +1358,7 @@ public class AutoGop : IChatable
 		int tabW = 41;
 		for (int t = 0; t < 5; t++)
 		{
-			int tX = winX + 8 + t * 43;
+			int tX = winX + 7 + t * 42;
 			if (GameCanvas.isPointerHoldIn(tX, tabY, tabW, 17))
 			{
 				selectedTab = t;
@@ -1830,87 +1372,87 @@ public class AutoGop : IChatable
 		// === TAB 0: CHUNG ===
 		if (selectedTab == 0)
 		{
-			int rY = winY + 48;
+			int rY = winY + 52;
 			// Checkbox + Order Bánh
-			if (GameCanvas.isPointerHoldIn(winX + 10, rY, 110, 15))
+			if (GameCanvas.isPointerHoldIn(winX + 10, rY, 95, 16))
 			{
 				enableBanh = !enableBanh;
 				GameCanvas.clearAllPointerEvent();
 				return;
 			}
-			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 15))
+			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 16))
 			{
 				GameCanvas.clearAllPointerEvent();
-				OpenInputField(2, "Thứ tự ưu tiên Bánh (1-4)", orderBanh.ToString());
+				OpenInputField(2, "Thứ tự ưu tiên Bánh (1-4)", "1");
 				return;
 			}
 
 			// Checkbox + Order HN
-			rY += 16;
-			if (GameCanvas.isPointerHoldIn(winX + 10, rY, 110, 15))
+			rY += 18;
+			if (GameCanvas.isPointerHoldIn(winX + 10, rY, 95, 16))
 			{
 				enableHn = !enableHn;
 				GameCanvas.clearAllPointerEvent();
 				return;
 			}
-			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 15))
+			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 16))
 			{
 				GameCanvas.clearAllPointerEvent();
-				OpenInputField(3, "Thứ tự ưu tiên HN (1-4)", orderHn.ToString());
+				OpenInputField(3, "Thứ tự ưu tiên HN (1-4)", "2");
 				return;
 			}
 
 			// Checkbox + Order Điểm
-			rY += 16;
-			if (GameCanvas.isPointerHoldIn(winX + 10, rY, 110, 15))
+			rY += 18;
+			if (GameCanvas.isPointerHoldIn(winX + 10, rY, 95, 16))
 			{
 				enableDiem = !enableDiem;
 				GameCanvas.clearAllPointerEvent();
 				return;
 			}
-			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 15))
+			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 16))
 			{
 				GameCanvas.clearAllPointerEvent();
-				OpenInputField(4, "Thứ tự ưu tiên Điểm (1-4)", orderDiem.ToString());
+				OpenInputField(4, "Thứ tự ưu tiên Điểm (1-4)", "3");
 				return;
 			}
 
 			// Checkbox + Order Zeno
-			rY += 16;
-			if (GameCanvas.isPointerHoldIn(winX + 10, rY, 110, 15))
+			rY += 18;
+			if (GameCanvas.isPointerHoldIn(winX + 10, rY, 95, 16))
 			{
 				enableZeno = !enableZeno;
 				GameCanvas.clearAllPointerEvent();
 				return;
 			}
-			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 15))
+			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 16))
 			{
 				GameCanvas.clearAllPointerEvent();
-				OpenInputField(5, "Thứ tự ưu tiên Zeno (1-4)", orderZeno.ToString());
+				OpenInputField(5, "Thứ tự ưu tiên Zeno (1-4)", "4");
 				return;
 			}
 
 			// Delay chuyển tiếp
-			rY += 16;
-			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 15))
+			rY += 19;
+			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 16))
 			{
 				GameCanvas.clearAllPointerEvent();
-				OpenInputField(1, "Delay chuyển giao các Tab (ms)", delayBetweenTabsMs.ToString());
+				OpenInputField(1, "Delay chuyển giao các Tab (ms)", "500");
 				return;
 			}
 
-			// Số vòng lặp mỗi lượt (0 = vô hạn)
-			rY += 16;
-			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 15))
+			// Số vòng lặp (0 = vô hạn)
+			rY += 18;
+			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 16))
 			{
 				GameCanvas.clearAllPointerEvent();
-				OpenInputField(6, "Số vòng lặp quy trình (0 = Vô hạn)", targetWorkflowLoops.ToString());
+				OpenInputField(6, "Số vòng lặp quy trình (0 = vô hạn)", targetWorkflowLoops.ToString());
 				return;
 			}
 
 			// Checkbox Tự bật Mua Nhiều (muanhieu)
-			rY += 16;
-			if (GameCanvas.isPointerHoldIn(winX + 10, rY, 190, 15))
+			rY += 19;
+			if (GameCanvas.isPointerHoldIn(winX + 10, rY, 190, 16))
 			{
 				autoChatMuaNhieu = !autoChatMuaNhieu;
 				if (autoChatMuaNhieu && !serverMuaNhieuEnabled)
@@ -1921,112 +1463,63 @@ public class AutoGop : IChatable
 				GameCanvas.clearAllPointerEvent();
 				return;
 			}
-
-			// Tối ưu giật lag: Checkbox Ẩn người & quái / Tắt chữ bay
-			rY += 16;
-			if (GameCanvas.isPointerHoldIn(winX + 10, rY, 100, 15))
-			{
-				hidePlayersAndMobs = !hidePlayersAndMobs;
-				GameCanvas.clearAllPointerEvent();
-				return;
-			}
-			if (GameCanvas.isPointerHoldIn(winX + 115, rY, 100, 15))
-			{
-				hideFlyInfoMessages = !hideFlyInfoMessages;
-				GameCanvas.clearAllPointerEvent();
-				return;
-			}
 		}
 
 		// === TAB 1: BÁNH ===
 		if (selectedTab == 1)
 		{
 			// Click dòng thông tin item để nhập ID tùy chỉnh
-			if (GameCanvas.isPointerHoldIn(winX + 10, winY + 50, 145, 15))
+			if (GameCanvas.isPointerHoldIn(winX + 10, winY + 50, 160, 18))
 			{
 				GameCanvas.clearAllPointerEvent();
 				OpenInputField(10, "Nhập ID vật phẩm Bánh", targetItemIdBanh.ToString());
 				return;
 			}
 
-			int rY = winY + 66;
+			int rY = winY + 70;
 			// Batch Qty
 			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 16))
 			{
 				GameCanvas.clearAllPointerEvent();
-				OpenInputField(11, "Số lượng mua mỗi đợt (1-1000)", batchQtyBanh.ToString());
+				OpenInputField(11, "Số lượng mua mỗi đợt (1-1000)", "1000");
 				return;
 			}
 			// Delay
-			rY += 17;
+			rY += 19;
 			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 16))
 			{
 				GameCanvas.clearAllPointerEvent();
-				OpenInputField(13, "Độ trễ mỗi đợt mua (ms)", delayBuyBanhMs.ToString());
+				OpenInputField(13, "Độ trễ mỗi đợt mua (ms)", "200");
 				return;
 			}
-			// ĐK 1: Đủ số đợt mua
-			rY += 18;
-			if (GameCanvas.isPointerHoldIn(winX + 10, rY, 140, 16))
+			// Cách 1: Đủ số lần mua
+			rY += 21;
+			if (GameCanvas.isPointerHoldIn(winX + 10, rY, 130, 16))
 			{
-				stopBanhCond1 = !stopBanhCond1;
-				if (!stopBanhCond1 && !stopBanhCond2 && !stopBanhCond3)
-				{
-					stopBanhCond1 = true;
-				}
+				stopConditionBanh = 1;
 				GameCanvas.clearAllPointerEvent();
 				return;
 			}
 			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 16))
 			{
-				stopBanhCond1 = true;
+				stopConditionBanh = 1;
 				GameCanvas.clearAllPointerEvent();
-				OpenInputField(12, "Số đợt mua cần đạt (0 = vô hạn)", targetBatchesBanh.ToString());
+				OpenInputField(12, "Số lần mua (0 = vô hạn)", "50");
 				return;
 			}
-			// ĐK 2: Đầy rương / Hết tài nguyên (có thể tích cùng lúc với ĐK 3)
-			rY += 17;
-			if (GameCanvas.isPointerHoldIn(winX + 10, rY, 190, 15))
+			// Cách 2: Số bánh rương đạt mốc
+			rY += 20;
+			if (GameCanvas.isPointerHoldIn(winX + 10, rY, 130, 16))
 			{
-				stopBanhCond2 = !stopBanhCond2;
-				if (!stopBanhCond1 && !stopBanhCond2 && !stopBanhCond3)
-				{
-					stopBanhCond2 = true;
-				}
-				GameCanvas.clearAllPointerEvent();
-				return;
-			}
-			// ĐK 3: Đạt mốc bánh trong rương -> Dùng hết (có thể tích cùng lúc với ĐK 2)
-			rY += 17;
-			if (GameCanvas.isPointerHoldIn(winX + 10, rY, 140, 16))
-			{
-				stopBanhCond3 = !stopBanhCond3;
-				if (!stopBanhCond1 && !stopBanhCond2 && !stopBanhCond3)
-				{
-					stopBanhCond3 = true;
-				}
+				stopConditionBanh = 2;
 				GameCanvas.clearAllPointerEvent();
 				return;
 			}
 			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 16))
 			{
-				stopBanhCond3 = true;
+				stopConditionBanh = 2;
 				GameCanvas.clearAllPointerEvent();
-				OpenInputField(14, "Mốc bánh trong rương cần đạt", targetItemCountBanh.ToString());
-				return;
-			}
-			// Rẽ nhánh khi xong Tab Bánh
-			rY += 18;
-			if (GameCanvas.isPointerHoldIn(winX + 10, rY, 140, 16))
-			{
-				enableRoutingBanh = !enableRoutingBanh;
-				GameCanvas.clearAllPointerEvent();
-				return;
-			}
-			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 16))
-			{
-				GameCanvas.clearAllPointerEvent();
-				OpenInputField(16, "Tab chuyển sang khi xong Bánh (1-4)", routeTargetTabBanh.ToString());
+				OpenInputField(14, "Mốc bánh trong rương cần đạt", "5000");
 				return;
 			}
 		}
@@ -2035,70 +1528,48 @@ public class AutoGop : IChatable
 		if (selectedTab == 2)
 		{
 			// Click dòng thông tin item để nhập ID tùy chỉnh
-			if (GameCanvas.isPointerHoldIn(winX + 10, winY + 50, 145, 16))
+			if (GameCanvas.isPointerHoldIn(winX + 10, winY + 50, 160, 18))
 			{
 				GameCanvas.clearAllPointerEvent();
 				OpenInputField(20, "Nhập ID vật phẩm HN", targetItemIdHn.ToString());
 				return;
 			}
 
-			int rY = winY + 67;
+			int rY = winY + 68;
 			// Batch Qty
 			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 16))
 			{
 				GameCanvas.clearAllPointerEvent();
-				OpenInputField(21, "Số lượng mua mỗi đợt", batchQtyHn.ToString());
+				OpenInputField(21, "Số lượng mua mỗi đợt", "1000");
 				return;
 			}
 			// Target Batches
-			rY += 17;
+			rY += 18;
 			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 16))
 			{
 				GameCanvas.clearAllPointerEvent();
-				OpenInputField(22, "Số đợt cần mua", targetBatchesHn.ToString());
+				OpenInputField(22, "Số đợt cần mua", "50");
 				return;
 			}
 			// Delay
-			rY += 17;
+			rY += 18;
 			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 16))
 			{
 				GameCanvas.clearAllPointerEvent();
-				OpenInputField(23, "Độ trễ mỗi đợt (ms)", delayBuyHnMs.ToString());
-				return;
-			}
-			// Radio ĐK dừng HN: Đủ đợt vs Đầy/Hết
-			rY += 18;
-			if (GameCanvas.isPointerHoldIn(winX + 10, rY, 95, 15))
-			{
-				stopConditionHn = 1;
-				GameCanvas.clearAllPointerEvent();
-				return;
-			}
-			if (GameCanvas.isPointerHoldIn(winX + 110, rY, 105, 15))
-			{
-				stopConditionHn = 2;
-				GameCanvas.clearAllPointerEvent();
-				return;
-			}
-			// Checkbox ĐK 3: Zeno < SL x 40K
-			rY += 17;
-			if (GameCanvas.isPointerHoldIn(winX + 10, rY, winW - 20, 15))
-			{
-				stopHnCond3 = !stopHnCond3;
-				GameCanvas.clearAllPointerEvent();
+				OpenInputField(23, "Độ trễ mỗi đợt (ms)", "200");
 				return;
 			}
 			// Checkbox vừa mua vừa dùng
-			rY += 17;
-			if (GameCanvas.isPointerHoldIn(winX + 10, rY, winW - 20, 15))
+			rY += 19;
+			if (GameCanvas.isPointerHoldIn(winX + 10, rY, winW - 20, 14))
 			{
 				autoUseHn = !autoUseHn;
 				GameCanvas.clearAllPointerEvent();
 				return;
 			}
 			// Checkbox rẽ nhánh ưu tiên (Local routing)
-			rY += 17;
-			if (GameCanvas.isPointerHoldIn(winX + 10, rY, 140, 16))
+			rY += 15;
+			if (GameCanvas.isPointerHoldIn(winX + 10, rY, winW - 55, 14))
 			{
 				enableRoutingHn = !enableRoutingHn;
 				GameCanvas.clearAllPointerEvent();
@@ -2107,7 +1578,7 @@ public class AutoGop : IChatable
 			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 16))
 			{
 				GameCanvas.clearAllPointerEvent();
-				OpenInputField(24, "Tab nhảy sang khi xong HN (1-4)", routeTargetTabHn.ToString());
+				OpenInputField(24, "Tab nhảy sang khi rẽ nhánh (1-4)", "4");
 				return;
 			}
 		}
@@ -2115,77 +1586,46 @@ public class AutoGop : IChatable
 		// === TAB 3: ĐIỂM ===
 		if (selectedTab == 3)
 		{
-			// Checkbox tự động chọn mốc (10Tr -> 5K -> 3K)
-			if (GameCanvas.isPointerHoldIn(winX + 10, winY + 65, winW - 20, 14))
-			{
-				autoSelectMocDiem = !autoSelectMocDiem;
-				if (autoSelectMocDiem && pointIndex > 2)
-				{
-					pointIndex = 1;
-				}
-				GameCanvas.clearAllPointerEvent();
-				return;
-			}
-
 			// 5 Mốc điểm
-			int mocY = winY + 81;
+			int mocY = winY + 80;
 			for (int m = 0; m < 5; m++)
 			{
-				int mX = winX + 11 + m * 42;
-				if (GameCanvas.isPointerHoldIn(mX, mocY, 38, 16))
+				int mX = winX + 10 + m * 41;
+				if (GameCanvas.isPointerHoldIn(mX, mocY, 37, 17))
 				{
 					pointIndex = m;
-					if (m > 2 && autoSelectMocDiem)
-					{
-						autoSelectMocDiem = false;
-					}
 					GameCanvas.clearAllPointerEvent();
 					return;
 				}
 			}
-
-			int rY = winY + 100;
+			int rY = winY + 101;
 			// Target Batches
 			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 16))
 			{
 				GameCanvas.clearAllPointerEvent();
-				OpenInputField(31, "Số lượt cần đổi (0 = vô hạn)", targetBatchesDiem.ToString());
+				OpenInputField(31, "Số lượt cần đổi (0 = vô hạn)", "50");
 				return;
 			}
 			// Delay
-			rY += 18;
+			rY += 19;
 			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 16))
 			{
 				GameCanvas.clearAllPointerEvent();
-				OpenInputField(32, "Độ trễ mỗi lượt (ms)", delayDiemMs.ToString());
+				OpenInputField(32, "Độ trễ mỗi lượt (ms)", "350");
 				return;
 			}
-			// ĐK dừng: Cách 1 (Đủ lượt) vs Cách 2 (Đầy/Hết điểm)
-			rY += 18;
-			if (GameCanvas.isPointerHoldIn(winX + 10, rY, 95, 15))
+			// ĐK dừng: Cách 1 vs Cách 2
+			rY += 20;
+			if (GameCanvas.isPointerHoldIn(winX + 10, rY, winW / 2 - 10, 14))
 			{
 				stopConditionDiem = 1;
 				GameCanvas.clearAllPointerEvent();
 				return;
 			}
-			if (GameCanvas.isPointerHoldIn(winX + 108, rY, 110, 15))
+			if (GameCanvas.isPointerHoldIn(winX + winW / 2, rY, winW / 2 - 10, 14))
 			{
 				stopConditionDiem = 2;
 				GameCanvas.clearAllPointerEvent();
-				return;
-			}
-			// Rẽ nhánh khi xong Tab Điểm
-			rY += 17;
-			if (GameCanvas.isPointerHoldIn(winX + 10, rY, 140, 16))
-			{
-				enableRoutingDiem = !enableRoutingDiem;
-				GameCanvas.clearAllPointerEvent();
-				return;
-			}
-			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 16))
-			{
-				GameCanvas.clearAllPointerEvent();
-				OpenInputField(33, "Tab chuyển sang khi xong Điểm (1-4)", routeTargetTabDiem.ToString());
 				return;
 			}
 		}
@@ -2198,7 +1638,7 @@ public class AutoGop : IChatable
 			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 16))
 			{
 				GameCanvas.clearAllPointerEvent();
-				OpenInputField(41, "Số lượng mỗi đợt (mặc định 19800)", batchQtyZeno.ToString());
+				OpenInputField(41, "Số lượng mỗi đợt (mặc định 19800)", "19800");
 				return;
 			}
 			// Target Batches
@@ -2206,7 +1646,7 @@ public class AutoGop : IChatable
 			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 16))
 			{
 				GameCanvas.clearAllPointerEvent();
-				OpenInputField(42, "Số đợt cần đổi (mặc định 1)", targetBatchesZeno.ToString());
+				OpenInputField(42, "Số lượng cần đổi (mặc định 1)", "1");
 				return;
 			}
 			// Delay
@@ -2214,35 +1654,23 @@ public class AutoGop : IChatable
 			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 16))
 			{
 				GameCanvas.clearAllPointerEvent();
-				OpenInputField(43, "Độ trễ mỗi đợt (ms)", delayZenoMs.ToString());
+				OpenInputField(43, "Độ trễ mỗi đợt (ms)", "350");
 				return;
 			}
 			// Nhánh 1: Đạt mục tiêu -> Tab
 			rY += 20;
-			if (GameCanvas.isPointerHoldIn(winX + 10, rY, 145, 16))
-			{
-				enableRouteDoneZeno = !enableRouteDoneZeno;
-				GameCanvas.clearAllPointerEvent();
-				return;
-			}
 			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 16))
 			{
 				GameCanvas.clearAllPointerEvent();
-				OpenInputField(44, "Tab khi đạt mục tiêu (VD: 2 là HN)", routeTargetWhenDoneZeno.ToString());
+				OpenInputField(44, "Tab khi đạt mục tiêu (VD: 2 là HN)", "2");
 				return;
 			}
 			// Nhánh 2: Thiếu vé -> Tab
-			rY += 19;
-			if (GameCanvas.isPointerHoldIn(winX + 10, rY, 145, 16))
-			{
-				enableRouteLackZeno = !enableRouteLackZeno;
-				GameCanvas.clearAllPointerEvent();
-				return;
-			}
+			rY += 18;
 			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 16))
 			{
 				GameCanvas.clearAllPointerEvent();
-				OpenInputField(45, "Tab khi thiếu vé (VD: 1 là Bánh)", routeTargetWhenLackZeno.ToString());
+				OpenInputField(45, "Tab khi thiếu vé (VD: 1 là Bánh)", "1");
 				return;
 			}
 		}
@@ -2250,14 +1678,14 @@ public class AutoGop : IChatable
 		// 2 Nút bấm đáy: BẮT ĐẦU & DỪNG
 		int btnX = winX + 14;
 		int btnW = winW - 28;
-		int startBtnY = winY + 198;
-		int stopBtnY = winY + 220;
+		int startBtnY = winY + 206;
+		int stopBtnY = winY + 228;
 
 		if (GameCanvas.isPointerHoldIn(btnX, startBtnY, btnW, 19))
 		{
 			GameCanvas.clearAllPointerEvent();
 			if (selectedTab == 0) StartWorkflow();
-			else StartTab(selectedTab);
+			else StartStandaloneTab(selectedTab);
 			return;
 		}
 
@@ -2339,7 +1767,7 @@ public class AutoGop : IChatable
 		string[] tabTitles = new string[5] { "Chung", "Bánh", "HN", "Điểm", "Zeno" };
 		for (int t = 0; t < 5; t++)
 		{
-			int tX = winX + 8 + t * 43;
+			int tX = winX + 7 + t * 42;
 			bool isSel = (selectedTab == t);
 			g.setColor(isSel ? 0x8D4918 : 0x261409);
 			g.fillRect(tX, tabY, 41, 17, 3);
@@ -2366,227 +1794,194 @@ public class AutoGop : IChatable
 		// === NỘI DUNG TAB 0: CHUNG ===
 		if (selectedTab == 0)
 		{
-			int rY = winY + 48;
+			int rY = winY + 52;
 			DrawCheckbox(g, labelX, rY, enableBanh, "1. Auto Bánh (92)");
 			mFont.tahoma_7_white.drawString(g, "Thứ tự:", inputX - 34, rY + 1, mFont.LEFT);
-			DrawInputBox(g, inputX, rY, 52, 14, orderBanh.ToString(), isGreenText: true);
+			DrawInputBox(g, inputX, rY, 52, 15, orderBanh.ToString(), isGreenText: true);
 
-			rY += 16;
+			rY += 18;
 			DrawCheckbox(g, labelX, rY, enableHn, "2. Auto HN (56)");
 			mFont.tahoma_7_white.drawString(g, "Thứ tự:", inputX - 34, rY + 1, mFont.LEFT);
-			DrawInputBox(g, inputX, rY, 52, 14, orderHn.ToString(), isGreenText: true);
+			DrawInputBox(g, inputX, rY, 52, 15, orderHn.ToString(), isGreenText: true);
 
-			rY += 16;
+			rY += 18;
 			DrawCheckbox(g, labelX, rY, enableDiem, "3. Đổi Điểm (66)");
 			mFont.tahoma_7_white.drawString(g, "Thứ tự:", inputX - 34, rY + 1, mFont.LEFT);
-			DrawInputBox(g, inputX, rY, 52, 14, orderDiem.ToString(), isGreenText: true);
+			DrawInputBox(g, inputX, rY, 52, 15, orderDiem.ToString(), isGreenText: true);
 
-			rY += 16;
+			rY += 18;
 			DrawCheckbox(g, labelX, rY, enableZeno, "4. Đổi Zeno (18)");
 			mFont.tahoma_7_white.drawString(g, "Thứ tự:", inputX - 34, rY + 1, mFont.LEFT);
-			DrawInputBox(g, inputX, rY, 52, 14, orderZeno.ToString(), isGreenText: true);
+			DrawInputBox(g, inputX, rY, 52, 15, orderZeno.ToString(), isGreenText: true);
 
-			rY += 16;
-			mFont.tahoma_7b_white.drawString(g, "Delay chuyển giao:", labelX, rY + 1, mFont.LEFT);
-			DrawInputBox(g, inputX, rY, 52, 14, delayBetweenTabsMs + " ms", isGreenText: false);
+			rY += 19;
+			mFont.tahoma_7b_white.drawString(g, "Delay chuyển giao:", labelX, rY + 2, mFont.LEFT);
+			DrawInputBox(g, inputX, rY, 52, 15, delayBetweenTabsMs + " ms", isGreenText: false);
 
-			rY += 16;
-			mFont.tahoma_7b_white.drawString(g, "Số vòng lặp (0=∞):", labelX, rY + 1, mFont.LEFT);
-			string loopValStr = (targetWorkflowLoops == 0) ? "0 (∞)" : targetWorkflowLoops.ToString();
-			DrawInputBox(g, inputX, rY, 52, 14, loopValStr, isGreenText: true);
+			rY += 18;
+			mFont.tahoma_7b_white.drawString(g, "Vòng lặp (0=vô hạn):", labelX, rY + 2, mFont.LEFT);
+			string loopBoxText = (targetWorkflowLoops == 0) ? "0=Vô hạn" : targetWorkflowLoops.ToString();
+			DrawInputBox(g, inputX, rY, 52, 15, loopBoxText, isGreenText: true);
 
-			rY += 16;
+			rY += 19;
 			DrawCheckbox(g, labelX, rY, autoChatMuaNhieu, "Tự bật Mua Nhiều (muanhieu)");
 
-			rY += 16;
-			DrawCheckbox(g, labelX, rY, hidePlayersAndMobs, "Ẩn người&quái");
-			DrawCheckbox(g, winX + 115, rY, hideFlyInfoMessages, "Tắt chữ bay");
-
 			string loopRunInfo = (targetWorkflowLoops == 0)
-				? ("Vòng " + (completedWorkflowLoops + 1) + "/∞")
+				? ("Vòng " + (completedWorkflowLoops + 1) + "/Vô hạn")
 				: ("Vòng " + (completedWorkflowLoops + 1) + "/" + targetWorkflowLoops);
 			string statusText = isRunningWorkflow
-				? ("Đang chạy: " + GetTabName(currentRunningTab) + " (" + loopRunInfo + ")")
-				: (isRunning ? ("Chạy lẻ: Tab " + GetTabName(currentRunningTab)) : "Trạng thái: Sẵn sàng (Phím F3)");
-			mFont.tahoma_7_yellow.drawString(g, statusText, headerCenterX, winY + 180, mFont.CENTER);
+				? ("Chạy: " + GetTabName(currentRunningTab) + " (" + loopRunInfo + ")")
+				: (isRunning ? ("Chạy độc lập: Tab " + GetTabName(currentRunningTab)) : "Trạng thái: Sẵn sàng (Phím F3)");
+			mFont.tahoma_7_yellow.drawString(g, statusText, headerCenterX, winY + 181, mFont.CENTER);
 		}
 
 		// === NỘI DUNG TAB 1: BÁNH ===
 		if (selectedTab == 1)
 		{
-			int rY = winY + 50;
+			int rY = winY + 52;
 			mFont.tahoma_7b_white.drawString(g, targetItemNameBanh + " [" + targetItemIdBanh + "] - NPC 92", labelX, rY, mFont.LEFT);
-			mFont.tahoma_7_yellow.drawString(g, "Bánh: " + GetBagItemCount(targetItemIdBanh), inputX + 50, rY - 2, mFont.RIGHT);
-			mFont.tahoma_7_red.drawString(g, "H.Ngọc: " + FormatShortNumber(GetHongNgoc()), inputX + 50, rY + 7, mFont.RIGHT);
+			mFont.tahoma_7_yellow.drawString(g, "Rương: " + GetBagItemCount(targetItemIdBanh), inputX + 48, rY, mFont.RIGHT);
 
-			rY = winY + 66;
-			mFont.tahoma_7_white.drawString(g, "Số lượng / đợt:", labelX, rY + 1, mFont.LEFT);
-			DrawInputBox(g, inputX, rY, 52, 15, batchQtyBanh.ToString(), isGreenText: true);
+			rY = winY + 70;
+			mFont.tahoma_7_white.drawString(g, "Số lượng / đợt:", labelX, rY + 2, mFont.LEFT);
+			DrawInputBox(g, inputX, rY, 52, 16, batchQtyBanh.ToString(), isGreenText: true);
 
-			rY += 17;
-			mFont.tahoma_7_white.drawString(g, "Độ trễ mỗi đợt:", labelX, rY + 1, mFont.LEFT);
-			DrawInputBox(g, inputX, rY, 52, 15, delayBuyBanhMs + " ms", isGreenText: false);
+			rY += 19;
+			mFont.tahoma_7_white.drawString(g, "Độ trễ mỗi đợt:", labelX, rY + 2, mFont.LEFT);
+			DrawInputBox(g, inputX, rY, 52, 16, delayBuyBanhMs + " ms", isGreenText: false);
 
-			rY += 18;
-			DrawCheckbox(g, labelX, rY, stopBanhCond1, "ĐK 1: Đủ số đợt mua");
-			DrawInputBox(g, inputX, rY, 52, 15, targetBatchesBanh.ToString(), isGreenText: true);
+			rY += 21;
+			DrawRadio(g, labelX, rY, stopConditionBanh == 1, "Cách 1: Đủ số lần mua");
+			DrawInputBox(g, inputX, rY, 52, 16, targetBatchesBanh.ToString(), isGreenText: true);
 
-			rY += 17;
-			DrawCheckbox(g, labelX, rY, stopBanhCond2, "ĐK 2: Đầy rương / Hết tài nguyên");
+			rY += 20;
+			DrawRadio(g, labelX, rY, stopConditionBanh == 2, "Cách 2: Đạt mốc rương");
+			DrawInputBox(g, inputX, rY, 52, 16, targetItemCountBanh.ToString(), isGreenText: true);
 
-			rY += 17;
-			DrawCheckbox(g, labelX, rY, stopBanhCond3, "ĐK 3: Đạt mốc -> Dùng hết");
-			DrawInputBox(g, inputX, rY, 52, 15, targetItemCountBanh.ToString(), isGreenText: true);
-
-			rY += 18;
-			DrawCheckbox(g, labelX, rY, enableRoutingBanh, "Rẽ nhánh khi xong ->");
-			DrawInputBox(g, inputX, rY, 52, 15, GetTabName(routeTargetTabBanh) + "(" + routeTargetTabBanh + ")", isGreenText: true);
-
-			string activeConds = "";
-			if (stopBanhCond1) activeConds += (activeConds.Length > 0 ? "+" : "") + "1";
-			if (stopBanhCond2) activeConds += (activeConds.Length > 0 ? "+" : "") + "2";
-			if (stopBanhCond3) activeConds += (activeConds.Length > 0 ? "+" : "") + "3";
-			string statusBanh = isUsingAllBanh
-				? "Đang tự động dùng hết bánh trong rương..."
-				: ("Đã mua: " + completedBatchesBanh + " đợt | ĐK dừng: " + activeConds);
-			mFont.tahoma_7_yellow.drawString(g, statusBanh, headerCenterX, winY + 175, mFont.CENTER);
+			string noteBanh = (stopConditionBanh == 2)
+				? "(Đạt mốc rương -> Tự dùng hết bánh rồi chuyển)"
+				: "(Đủ số lần hoặc hết tài nguyên/đầy rương -> Dừng)";
+			mFont.tahoma_7_yellow.drawString(g, noteBanh, headerCenterX, winY + 181, mFont.CENTER);
 		}
 
 		// === NỘI DUNG TAB 2: HN ===
 		if (selectedTab == 2)
 		{
-			int rY = winY + 50;
+			int rY = winY + 52;
 			mFont.tahoma_7b_white.drawString(g, targetItemNameHn + " [" + targetItemIdHn + "] - NPC 56", labelX, rY, mFont.LEFT);
-			mFont.tahoma_7_yellow.drawString(g, "Rương: " + GetBagItemCount(targetItemIdHn), inputX + 50, rY - 2, mFont.RIGHT);
-			mFont.tahoma_7_green.drawString(g, "Zeno: " + FormatShortNumber(GetBagItemCount(ZenoItemId)), inputX + 50, rY + 7, mFont.RIGHT);
+			mFont.tahoma_7_yellow.drawString(g, "Rương: " + GetBagItemCount(targetItemIdHn), inputX + 48, rY, mFont.RIGHT);
 
-			rY = winY + 67;
-			mFont.tahoma_7_white.drawString(g, "Số lượng / đợt:", labelX, rY + 1, mFont.LEFT);
-			DrawInputBox(g, inputX, rY, 52, 15, batchQtyHn.ToString(), isGreenText: true);
-
-			rY += 17;
-			mFont.tahoma_7_white.drawString(g, "Số đợt cần mua:", labelX, rY + 1, mFont.LEFT);
-			DrawInputBox(g, inputX, rY, 52, 15, targetBatchesHn.ToString(), isGreenText: true);
-
-			rY += 17;
-			mFont.tahoma_7_white.drawString(g, "Độ trễ mỗi đợt:", labelX, rY + 1, mFont.LEFT);
-			DrawInputBox(g, inputX, rY, 52, 15, delayBuyHnMs + " ms", isGreenText: false);
+			rY = winY + 68;
+			mFont.tahoma_7_white.drawString(g, "Số lượng / đợt:", labelX, rY + 2, mFont.LEFT);
+			DrawInputBox(g, inputX, rY, 52, 16, batchQtyHn.ToString(), isGreenText: true);
 
 			rY += 18;
-			DrawRadio(g, labelX, rY, stopConditionHn == 1, "ĐK 1: Đủ đợt");
-			DrawRadio(g, winX + 110, rY, stopConditionHn == 2, "ĐK 2: Đầy/Hết");
+			mFont.tahoma_7_white.drawString(g, "Số đợt cần mua:", labelX, rY + 2, mFont.LEFT);
+			DrawInputBox(g, inputX, rY, 52, 16, targetBatchesHn.ToString(), isGreenText: true);
 
-			rY += 17;
-			DrawCheckbox(g, labelX, rY, stopHnCond3, "ĐK 3: Zeno < " + FormatShortNumber(GetZenoRequiredHn()) + " (SL x 40K)");
+			rY += 18;
+			mFont.tahoma_7_white.drawString(g, "Độ trễ mỗi đợt:", labelX, rY + 2, mFont.LEFT);
+			DrawInputBox(g, inputX, rY, 52, 16, delayBuyHnMs + " ms", isGreenText: false);
 
-			rY += 17;
+			rY += 19;
 			DrawCheckbox(g, labelX, rY, autoUseHn, "Vừa mua vừa dùng (" + targetItemIdHn + ")");
 
-			rY += 17;
-			DrawCheckbox(g, labelX, rY, enableRoutingHn, "Rẽ nhánh khi xong ->");
-			DrawInputBox(g, inputX, rY, 52, 15, GetTabName(routeTargetTabHn) + "(" + routeTargetTabHn + ")", isGreenText: true);
+			rY += 15;
+			DrawCheckbox(g, labelX, rY, enableRoutingHn, "Rẽ nhánh khi đầy/hết ->");
+			mFont.tahoma_7_yellow.drawString(g, "Tab:", inputX - 25, rY + 1, mFont.LEFT);
+			DrawInputBox(g, inputX, rY, 52, 16, GetTabName(routeTargetTabHn) + "(" + routeTargetTabHn + ")", isGreenText: true);
 
-			mFont.tahoma_7_yellow.drawString(g, "Đã mua: " + completedBatchesHn + " đợt | ĐK dừng: Cách " + stopConditionHn + (stopHnCond3 ? "+3" : ""), headerCenterX, winY + 186, mFont.CENTER);
+			mFont.tahoma_7_white.drawString(g, "(Rẽ nhánh Tab HN có ưu tiên cao hơn Tab Chung)", headerCenterX, winY + 181, mFont.CENTER);
 		}
 
 		// === NỘI DUNG TAB 3: ĐIỂM ===
 		if (selectedTab == 3)
 		{
 			int rY = winY + 50;
-			string ptStr = (currentDiemPoints >= 0) ? (NinjaUtil.getMoneys(currentDiemPoints) + "đ") : "Chưa mở NPC";
-			mFont.tahoma_7b_yellow.drawString(g, "Điểm: " + ptStr, labelX, rY, mFont.LEFT);
+			string ptStr = (currentDiemPoints >= 0) ? (NinjaUtil.getMoneys(currentDiemPoints) + " điểm") : "Đang cập nhật...";
+			mFont.tahoma_7b_yellow.drawString(g, "Điểm hiện có: " + ptStr, labelX, rY, mFont.LEFT);
 
-			// Nhắc nhở bật lọc đồ gọn ở góc phải dòng đầu
+			// Alert Lọc đồ
 			g.setColor(0xB71C1C);
-			g.fillRect(winX + winW - 88, rY - 1, 76, 13, 2);
-			mFont.tahoma_7b_white.drawString(g, "Bật Lọc Đồ!", winX + winW - 50, rY, mFont.CENTER);
-
-			// Checkbox tự động chọn mốc (10Tr -> 5K -> 3K)
-			rY = winY + 65;
-			DrawCheckbox(g, labelX, rY, autoSelectMocDiem, "Tự động chọn mốc (10Tr -> 5K -> 3K)");
+			g.fillRect(winX + 10, winY + 63, winW - 20, 14, 2);
+			mFont.tahoma_7b_white.drawString(g, "⚠️ VUI LÒNG BẬT TỰ ĐỘNG LỌC ĐỒ", headerCenterX, winY + 64, mFont.CENTER);
 
 			// 5 Mốc điểm
-			int mocY = winY + 81;
+			int mocY = winY + 80;
 			for (int m = 0; m < 5; m++)
 			{
-				int mX = winX + 11 + m * 42;
+				int mX = winX + 10 + m * 41;
 				bool isSel = (pointIndex == m);
-				bool isAutoTier = autoSelectMocDiem && m <= 2;
-				g.setColor(isSel ? 0x1B5E20 : (isAutoTier ? 0x2E3B1F : 0x160D06));
-				g.fillRect(mX, mocY, 38, 16, 3);
+				g.setColor(isSel ? 0x1B5E20 : 0x160D06);
+				g.fillRect(mX, mocY, 37, 17, 3);
 				if (isSel)
 				{
 					g.setColor(0x2E7D32);
-					g.fillRect(mX + 1, mocY + 1, 36, 7, 2);
+					g.fillRect(mX + 1, mocY + 1, 35, 8, 2);
 				}
-				g.setColor(isSel ? 0xF7CE68 : (isAutoTier ? 0x81C784 : 0x8D6E63));
-				g.drawRect(mX, mocY, 37, 15);
+				g.setColor(isSel ? 0xF7CE68 : 0x8D6E63);
+				g.drawRect(mX, mocY, 36, 16);
 				if (isSel)
 				{
-					mFont.tahoma_7b_yellow.drawStringBorder(g, MocShortNames[m], mX + 19, mocY + 2, mFont.CENTER, mFont.tahoma_7_grey);
+					mFont.tahoma_7b_yellow.drawStringBorder(g, MocShortNames[m], mX + 18, mocY + 3, mFont.CENTER, mFont.tahoma_7_grey);
 				}
 				else
 				{
-					mFont.tahoma_7b_white.drawString(g, MocShortNames[m], mX + 19, mocY + 2, mFont.CENTER);
+					mFont.tahoma_7b_white.drawString(g, MocShortNames[m], mX + 18, mocY + 3, mFont.CENTER);
 				}
 			}
 
-			rY = winY + 100;
-			mFont.tahoma_7_white.drawString(g, "Số lượt cần đổi:", labelX, rY + 1, mFont.LEFT);
-			DrawInputBox(g, inputX, rY, 52, 15, targetBatchesDiem.ToString(), isGreenText: true);
+			rY = winY + 101;
+			mFont.tahoma_7_white.drawString(g, "Số lượt cần đổi:", labelX, rY + 2, mFont.LEFT);
+			DrawInputBox(g, inputX, rY, 52, 16, targetBatchesDiem.ToString(), isGreenText: true);
 
-			rY += 18;
-			mFont.tahoma_7_white.drawString(g, "Độ trễ mỗi lượt:", labelX, rY + 1, mFont.LEFT);
-			DrawInputBox(g, inputX, rY, 52, 15, delayDiemMs + " ms", isGreenText: false);
+			rY += 19;
+			mFont.tahoma_7_white.drawString(g, "Độ trễ mỗi lượt:", labelX, rY + 2, mFont.LEFT);
+			DrawInputBox(g, inputX, rY, 52, 16, delayDiemMs + " ms", isGreenText: false);
 
-			rY += 18;
-			DrawRadio(g, labelX, rY, stopConditionDiem == 1, "ĐK 1: Đủ lượt");
-			DrawRadio(g, winX + 108, rY, stopConditionDiem == 2, "ĐK 2: Đầy/Hết điểm");
+			rY += 20;
+			DrawRadio(g, labelX, rY, stopConditionDiem == 1, "Đủ số lượt");
+			DrawRadio(g, winX + winW / 2, rY, stopConditionDiem == 2, "Điểm < Mốc");
 
-			rY += 17;
-			DrawCheckbox(g, labelX, rY, enableRoutingDiem, "Rẽ nhánh khi xong ->");
-			DrawInputBox(g, inputX, rY, 52, 15, GetTabName(routeTargetTabDiem) + "(" + routeTargetTabDiem + ")", isGreenText: true);
-
-			string mocStatus = autoSelectMocDiem ? ("Tự động [" + MocShortNames[pointIndex] + "]") : MocFullNames[pointIndex];
-			mFont.tahoma_7_yellow.drawString(g, "Đã đổi: " + completedBatchesDiem + " lượt | Mốc: " + mocStatus, headerCenterX, winY + 175, mFont.CENTER);
+			mFont.tahoma_7_yellow.drawString(g, "Mốc chọn: " + MocFullNames[pointIndex], headerCenterX, winY + 181, mFont.CENTER);
 		}
 
 		// === NỘI DUNG TAB 4: ZENO ===
 		if (selectedTab == 4)
 		{
-			int rY = winY + 50;
+			int rY = winY + 52;
 			mFont.tahoma_7b_white.drawString(g, "Vé Zeno (1583) - Karin (18)", labelX, rY, mFont.LEFT);
-			mFont.tahoma_7_yellow.drawString(g, "Vé: " + GetBagItemCount(1583) + " cái", inputX + 50, rY, mFont.RIGHT);
+			mFont.tahoma_7_yellow.drawString(g, "Vé: " + GetBagItemCount(1583) + " cái", inputX + 48, rY, mFont.RIGHT);
 
 			rY = winY + 68;
-			mFont.tahoma_7_white.drawString(g, "Số lượng / đợt:", labelX, rY + 1, mFont.LEFT);
-			DrawInputBox(g, inputX, rY, 52, 15, batchQtyZeno.ToString(), isGreenText: true);
+			mFont.tahoma_7_white.drawString(g, "Số lượng / đợt:", labelX, rY + 2, mFont.LEFT);
+			DrawInputBox(g, inputX, rY, 52, 16, batchQtyZeno.ToString(), isGreenText: true);
 
 			rY += 18;
-			mFont.tahoma_7_white.drawString(g, "Số đợt cần đổi:", labelX, rY + 1, mFont.LEFT);
-			DrawInputBox(g, inputX, rY, 52, 15, targetBatchesZeno.ToString(), isGreenText: true);
+			mFont.tahoma_7_white.drawString(g, "Số đợt cần đổi:", labelX, rY + 2, mFont.LEFT);
+			DrawInputBox(g, inputX, rY, 52, 16, targetBatchesZeno.ToString(), isGreenText: true);
 
 			rY += 18;
-			mFont.tahoma_7_white.drawString(g, "Độ trễ mỗi đợt:", labelX, rY + 1, mFont.LEFT);
-			DrawInputBox(g, inputX, rY, 52, 15, delayZenoMs + " ms", isGreenText: false);
+			mFont.tahoma_7_white.drawString(g, "Độ trễ mỗi đợt:", labelX, rY + 2, mFont.LEFT);
+			DrawInputBox(g, inputX, rY, 52, 16, delayZenoMs + " ms", isGreenText: false);
 
 			rY += 20;
-			DrawCheckbox(g, labelX, rY, enableRouteDoneZeno, "Nhánh 1 (Đủ đợt) ->");
-			DrawInputBox(g, inputX, rY, 52, 15, GetTabName(routeTargetWhenDoneZeno) + "(" + routeTargetWhenDoneZeno + ")", isGreenText: true);
+			mFont.tahoma_7_white.drawString(g, "Nhánh 1 (Đạt mục tiêu) ->", labelX, rY + 2, mFont.LEFT);
+			DrawInputBox(g, inputX, rY, 52, 16, GetTabName(routeTargetWhenDoneZeno) + "(" + routeTargetWhenDoneZeno + ")", isGreenText: true);
 
-			rY += 19;
-			DrawCheckbox(g, labelX, rY, enableRouteLackZeno, "Nhánh 2 (Vé < " + batchQtyZeno + ") ->");
-			DrawInputBox(g, inputX, rY, 52, 15, GetTabName(routeTargetWhenLackZeno) + "(" + routeTargetWhenLackZeno + ")", isGreenText: true);
+			rY += 18;
+			mFont.tahoma_7_white.drawString(g, "Nhánh 2 (Vé < " + batchQtyZeno + ") ->", labelX, rY + 2, mFont.LEFT);
+			DrawInputBox(g, inputX, rY, 52, 16, GetTabName(routeTargetWhenLackZeno) + "(" + routeTargetWhenLackZeno + ")", isGreenText: true);
 
-			mFont.tahoma_7_yellow.drawString(g, "Đã đổi: " + completedBatchesZeno + " đợt (Tích chọn để bật/tắt nhánh)", headerCenterX, winY + 175, mFont.CENTER);
+			mFont.tahoma_7_yellow.drawString(g, "(Chạy song song 2 nhánh: Đạt mục tiêu / Thiếu vé)", headerCenterX, winY + 181, mFont.CENTER);
 		}
 
 		// 2 Nút bấm đáy
 		int btnX = winX + 14;
 		int btnW = winW - 28;
 		int btnH = 19;
-		int startBtnY = winY + 198;
-		int stopBtnY = winY + 220;
+		int startBtnY = winY + 206;
+		int stopBtnY = winY + 228;
 
 		string startText = isRunning
 			? ("ĐANG CHẠY " + GetTabName(currentRunningTab).ToUpper() + "...")

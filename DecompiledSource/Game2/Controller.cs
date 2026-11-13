@@ -2228,57 +2228,57 @@ public class Controller : IMessageHandler
 						}
 					}
 				}
-				if (!Game2.Mod.AutoGop.gI().ShouldSuppressGameUi())
+				if (flag4)
 				{
+					if (b34 != 2)
+					{
+						GameCanvas.panel2 = new Panel();
+						GameCanvas.panel2.tabName[7] = new string[1][] { new string[1] { string.Empty } };
+						GameCanvas.panel2.setTypeBodyOnly();
+						GameCanvas.panel2.show();
+					}
+					else
+					{
+						GameCanvas.panel2 = new Panel();
+						GameCanvas.panel2.setTypeKiGuiOnly();
+						GameCanvas.panel2.show();
+					}
+				}
+				GameCanvas.panel.tabName[1] = GameCanvas.panel.shopTabName;
+				if (b34 == 2)
+				{
+					string[][] array10 = GameCanvas.panel.tabName[1];
 					if (flag4)
 					{
-						if (b34 != 2)
+						GameCanvas.panel.tabName[1] = new string[4][]
 						{
-							GameCanvas.panel2 = new Panel();
-							GameCanvas.panel2.tabName[7] = new string[1][] { new string[1] { string.Empty } };
-							GameCanvas.panel2.setTypeBodyOnly();
-							GameCanvas.panel2.show();
-						}
-						else
-						{
-							GameCanvas.panel2 = new Panel();
-							GameCanvas.panel2.setTypeKiGuiOnly();
-							GameCanvas.panel2.show();
-						}
+							array10[0],
+							array10[1],
+							array10[2],
+							array10[3]
+						};
 					}
-					GameCanvas.panel.tabName[1] = GameCanvas.panel.shopTabName;
-					if (b34 == 2)
+					else
 					{
-						string[][] array10 = GameCanvas.panel.tabName[1];
-						if (flag4)
+						GameCanvas.panel.tabName[1] = new string[5][]
 						{
-							GameCanvas.panel.tabName[1] = new string[4][]
-							{
-								array10[0],
-								array10[1],
-								array10[2],
-								array10[3]
-							};
-						}
-						else
-						{
-							GameCanvas.panel.tabName[1] = new string[5][]
-							{
-								array10[0],
-								array10[1],
-								array10[2],
-								array10[3],
-								array10[4]
-							};
-						}
+							array10[0],
+							array10[1],
+							array10[2],
+							array10[3],
+							array10[4]
+						};
 					}
-					GameCanvas.panel.setTypeShop(b34);
-					GameCanvas.panel.show();
 				}
-				else
+				GameCanvas.panel.setTypeShop(b34);
+				GameCanvas.panel.show();
+				if (Game2.Mod.AutoGop.gI().isRunning && Game2.Mod.AutoGop.gI().hideUi)
 				{
-					GameCanvas.panel.isShow = false;
-					GameCanvas.panel2 = null;
+					GameCanvas.panel.hideNow();
+					if (GameCanvas.panel2 != null)
+					{
+						GameCanvas.panel2.hideNow();
+					}
 				}
 				Game2.Mod.AutoGop.gI().OnShopOpened(b34);
 				break;
@@ -2435,7 +2435,6 @@ public class Controller : IMessageHandler
 						Char.myCharz().arrItemBag[b25] = null;
 					}
 				}
-				Game2.Mod.AutoGop.gI().OnBagUpdated();
 				break;
 			}
 			case -35:
@@ -2638,13 +2637,6 @@ public class Controller : IMessageHandler
 					ModFunc.pointIncrease = 0;
 					ModFunc.autoPointForPet = false;
 					GameScr.info1.addInfo("Chỉ số đã đạt tối đa", 0);
-				}
-				Game2.Mod.AutoGop.gI().OnServerInfo(text7);
-				Game2.Mod.AutoMuaNhieu.gI().OnServerInfo(text7);
-				if (Game2.Mod.AutoGop.gI().ShouldSuppressGameUi())
-				{
-					GameCanvas.endDlg();
-					break;
 				}
 				GameCanvas.startOKDlg(text7);
 				InfoDlg.hide();
@@ -3142,14 +3134,7 @@ public class Controller : IMessageHandler
 					short num5 = msg.reader().readShort();
 					myVector.addElement(new Command(caption, GameCanvas.instance, 88819, num5));
 				}
-				if (Game2.Mod.AutoGop.gI().OnReceiveNewMenu(myVector))
-				{
-					break;
-				}
-				if (!Game2.Mod.AutoGop.gI().ShouldSuppressGameUi())
-				{
-					GameCanvas.menu.startWithoutCloseButton(myVector, 3);
-				}
+				GameCanvas.menu.startWithoutCloseButton(myVector, 3);
 				break;
 			}
 			case 29:
@@ -3171,9 +3156,8 @@ public class Controller : IMessageHandler
 							array18[num179] = msg.reader().readUTF();
 						}
 						Game2.Mod.AutoGop.gI().ParseDiemPoints(text8, num177, array18);
-						Game2.Mod.AutoGop.gI().OnReceiveMenuChat(num177, text8);
 						GameScr.gI().createMenu(array18, npc4);
-						if ((!Game2.Mod.NpcMenuHelper.gI().isAutoRunning || Game2.Mod.NpcMenuHelper.gI().autoNpcId != num177 || !Game2.Mod.NpcMenuHelper.gI().hideUi) && (!Game2.Mod.AutoGop.gI().ShouldSuppressGameUi()))
+						if ((!Game2.Mod.NpcMenuHelper.gI().isAutoRunning || Game2.Mod.NpcMenuHelper.gI().autoNpcId != num177 || !Game2.Mod.NpcMenuHelper.gI().hideUi) && (!Game2.Mod.AutoGop.gI().isRunning || !Game2.Mod.AutoGop.gI().hideUi))
 						{
 							ChatPopup.addChatPopup(text8, 100000, npc4);
 						}
@@ -3199,9 +3183,8 @@ public class Controller : IMessageHandler
 				{
 				}
 				Game2.Mod.AutoGop.gI().ParseDiemPoints(chat2, num177, array19);
-				Game2.Mod.AutoGop.gI().OnReceiveMenuChat(num177, chat2);
 				GameScr.gI().createMenu(array19, npc5);
-				if ((!Game2.Mod.NpcMenuHelper.gI().isAutoRunning || Game2.Mod.NpcMenuHelper.gI().autoNpcId != num177 || !Game2.Mod.NpcMenuHelper.gI().hideUi) && (!Game2.Mod.AutoGop.gI().ShouldSuppressGameUi()))
+				if ((!Game2.Mod.NpcMenuHelper.gI().isAutoRunning || Game2.Mod.NpcMenuHelper.gI().autoNpcId != num177 || !Game2.Mod.NpcMenuHelper.gI().hideUi) && (!Game2.Mod.AutoGop.gI().isRunning || !Game2.Mod.AutoGop.gI().hideUi))
 				{
 					ChatPopup.addChatPopup(chat2, 100000, npc5);
 				}
@@ -3225,20 +3208,8 @@ public class Controller : IMessageHandler
 				{
 					Cout.println("Loi OPEN_UI_MENU " + ex27.ToString());
 				}
-				if (Char.myCharz().npcFocus == null && Game2.Mod.AutoGop.gI().isRunning)
-				{
-					int targetNpcId = Game2.Mod.AutoGop.gI().GetCurrentTargetNpcId();
-					if (targetNpcId >= 0)
-					{
-						Char.myCharz().npcFocus = ModFunc.GetNpcByTempId(targetNpcId);
-					}
-				}
 				if (Char.myCharz().npcFocus == null)
 				{
-					if (Game2.Mod.AutoGop.gI().OnReceiveOpenUiMenu(myVector))
-					{
-						break;
-					}
 					return;
 				}
 				for (int num173 = 0; num173 < Char.myCharz().npcFocus.template.menu.Length; num173++)
@@ -3246,14 +3217,7 @@ public class Controller : IMessageHandler
 					string[] array17 = Char.myCharz().npcFocus.template.menu[num173];
 					myVector.addElement(new Command(array17[0], GameCanvas.instance, 88820, array17));
 				}
-				if (Game2.Mod.AutoGop.gI().OnReceiveOpenUiMenu(myVector))
-				{
-					break;
-				}
-				if (!Game2.Mod.AutoGop.gI().ShouldSuppressGameUi())
-				{
-					GameCanvas.menu.startAt(myVector, 3);
-				}
+				GameCanvas.menu.startAt(myVector, 3);
 				break;
 			}
 			case 38:
@@ -3262,13 +3226,6 @@ public class Controller : IMessageHandler
 				int num159 = msg.reader().readShort();
 				string str6 = msg.reader().readUTF();
 				str6 = Res.changeString(str6);
-				Game2.Mod.AutoGop.gI().OnServerInfo(str6);
-				Game2.Mod.AutoMuaNhieu.gI().OnServerInfo(str6);
-				if (Game2.Mod.AutoGop.gI().ShouldSuppressGameUi())
-				{
-					GameCanvas.panel.hideNow();
-					break;
-				}
 				for (int num160 = 0; num160 < GameScr.vNpc.size(); num160++)
 				{
 					Npc npc2 = (Npc)GameScr.vNpc.elementAt(num160);
@@ -3545,10 +3502,7 @@ public class Controller : IMessageHandler
 				GameCanvas.debug("SZ6", 2);
 				MyVector myVector2 = new MyVector();
 				myVector2.addElement(new Command(msg.reader().readUTF(), GameCanvas.instance, 88817, null));
-				if (!Game2.Mod.AutoGop.gI().ShouldSuppressGameUi())
-				{
-					GameCanvas.menu.startAt(myVector2, 3);
-				}
+				GameCanvas.menu.startAt(myVector2, 3);
 				break;
 			}
 			case 58:
@@ -5563,7 +5517,6 @@ public class Controller : IMessageHandler
 						GameScr.hpPotion += Char.myCharz().arrItemBag[l].quantity;
 					}
 				}
-				Game2.Mod.AutoGop.gI().OnBagUpdated();
 				Char.myCharz().arrItemBox = new Item[msg.reader().readByte()];
 				GameCanvas.panel.hasUse = 0;
 				for (int n = 0; n < Char.myCharz().arrItemBox.Length; n++)

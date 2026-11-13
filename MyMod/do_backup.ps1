@@ -1,5 +1,5 @@
-$backupDir = 'c:\Users\admin\Documents\Nro2\Backup'
-$rootDir = 'c:\Users\admin\Documents\Nro2'
+$rootDir = Split-Path -Parent $PSScriptRoot
+$backupDir = Join-Path $rootDir 'Backup'
 
 Write-Host "Đang sao lưu Managed DLL..." -ForegroundColor Cyan
 New-Item -ItemType Directory -Path "$backupDir\Managed" -Force | Out-Null
@@ -25,10 +25,6 @@ $files = @(
     'Game2.Mod\AutoMuaNhieu.cs',
     'Game1.Mod\NpcMenuHelper.cs',
     'Game2.Mod\NpcMenuHelper.cs',
-    'Game1.Mod.XMAP\XmapData.cs',
-    'Game2.Mod.XMAP\XmapData.cs',
-    'Game1.Mod.XMAP\XmapController.cs',
-    'Game2.Mod.XMAP\XmapController.cs',
     'Assembly-CSharp.csproj'
 )
 
@@ -53,15 +49,6 @@ $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $zipPath = "$backupDir\Backup_Snapshot_$timestamp.zip"
 Write-Host "Đang tạo bản nén đóng gói: $zipPath ..." -ForegroundColor Cyan
 
-$tempBackup = "$env:TEMP\Backup_Temp_$timestamp"
-New-Item -ItemType Directory -Path $tempBackup -Force | Out-Null
-Copy-Item -Recurse "$backupDir\Managed" "$tempBackup\" -Force
-Copy-Item -Recurse "$backupDir\DecompiledSource" "$tempBackup\" -Force
-Copy-Item -Recurse "$backupDir\MyMod" "$tempBackup\" -Force
-Copy-Item -Recurse "$backupDir\Kehoach" "$tempBackup\" -Force
-
-Compress-Archive -Path "$tempBackup\*" -DestinationPath $zipPath -Force
-Remove-Item -Recurse -Force $tempBackup
+Compress-Archive -Path "$backupDir\Managed", "$backupDir\DecompiledSource", "$backupDir\MyMod", "$backupDir\Kehoach" -DestinationPath $zipPath -Force
 
 Write-Host "Sao lưu toàn bộ Data và Mod thành công!" -ForegroundColor Green
-

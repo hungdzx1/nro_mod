@@ -4871,7 +4871,7 @@ public class Char : IMapObject
 
 	public virtual void paint(mGraphics g)
 	{
-		if (ModFunc.AnPlayer || isHide || (this != Char.myCharz() && Game1.Mod.AutoGop.gI().isRunning && Game1.Mod.AutoGop.gI().hidePlayersAndMobs))
+		if (ModFunc.AnPlayer || isHide)
 		{
 			return;
 		}

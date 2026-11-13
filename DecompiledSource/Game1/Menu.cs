@@ -68,7 +68,7 @@ public class Menu
 
 	private bool touch;
 
-	public bool close;
+	private bool close;
 
 	private int cmvx;
 

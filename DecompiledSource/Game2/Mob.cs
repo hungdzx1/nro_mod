@@ -1384,7 +1384,7 @@ public class Mob : IMapObject
 
 	public virtual void paint(mGraphics g)
 	{
-		if (isHide || (Game2.Mod.AutoGop.gI().isRunning && Game2.Mod.AutoGop.gI().hidePlayersAndMobs))
+		if (isHide)
 		{
 			return;
 		}

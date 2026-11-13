@@ -333,13 +333,6 @@ public class InfoMe
 				return;
 			}
 		}
-		if (Game2.Mod.AutoGop.gI().isRunning && Game2.Mod.AutoGop.gI().hideFlyInfoMessages)
-		{
-			if (!s.StartsWith("▶") && !s.StartsWith("■") && !s.ToLower().Contains("dừng"))
-			{
-				return;
-			}
-		}
 		if (info.infoWaitToShow.size() > 0 && s.Equals(((InfoItem)info.infoWaitToShow.lastElement()).s))
 		{
 			return;
