@@ -141,3 +141,28 @@
 - Chạy kiểm thử 100% PASS trước build theo `AGENTS.md`; build `DecompiledSource/Assembly-CSharp.csproj` theo pipeline dự án; không tự ý chạy lệnh xóa dữ liệu hoặc thay DLL gốc tham chiếu.
 - Sau build, phải thử nghiệm in-game vì static test không thể chứng minh server chấp nhận menu hay giao dịch.
 - Báo cáo rõ file/dòng sửa, bug root cause đã chứng minh, test PASS/FAIL, tình trạng test game thực tế và mọi giới hạn còn lại.
+
+## X. Nhật ký triển khai — Tự dùng hộp hồng ngọc khi mua Bánh thiếu tài nguyên (14/11/2026)
+
+> Mục này ghi nhận phần đã triển khai trên source đang được `MyMod/build_mod.ps1` biên dịch. Các mục I–IX ở trên là đặc tả V2 trước đó; không dùng chúng để suy ra rằng toàn bộ V2 đã được triển khai trong lần cập nhật này.
+
+### Hành vi đã thêm
+
+- Panel Auto Dùng Nhanh có sẵn **Hộp hồng ngọc [1581]** trong danh sách khi khởi tạo, nhưng item này mặc định không được bật để chạy tự động. Ô **Theo ô bánh** mặc định tắt.
+- Tab Bánh có ô **Tự dùng hộp HN [1581]** mặc định tắt và ô **Số hộp / tín hiệu** mặc định `400000`, cho phép nhập số nguyên dương. Chỉ bật được tùy chọn khi ID `1581` còn trong danh sách Auto Dùng Nhanh.
+- Chỉ xét phát tín hiệu khi Tab Bánh đang chạy, có lệnh mua Bánh đang chờ trong tối đa 10 giây, và nhận đúng thông báo **“Bạn không đủ hồng ngọc”**. Lỗi thiếu tài nguyên khác, thông báo cũ hoặc lệnh mua đã làm số Bánh trong hành trang tăng không kích hoạt đợt dùng hộp.
+- Khi cả hai ô tích đều bật và còn hộp `1581` trong hành trang, Auto Dùng Nhanh nhận **một đợt** với mục tiêu số lượng từ Tab Bánh. Trong lúc đợt đang chạy, tín hiệu lặp bị bỏ qua. Auto mua Bánh vẫn tiếp tục hoạt động.
+- Đợt dùng hộp tạm ưu tiên **chỉ ID `1581`**; các item dùng nhanh khác tạm chờ rồi chạy tiếp sau đợt. Số đã dùng tính theo lượng hộp giảm trong hành trang sau mỗi lệnh `useItem`, không tính theo số lệnh gửi. Đạt mục tiêu hoặc hết hộp thì kết thúc và sẵn sàng nhận tín hiệu từ một lần mua thất bại mới.
+- Tốc độ gửi lệnh dùng hộp lấy từ `delayMs` trong panel Auto Dùng Nhanh (mặc định `200 ms`). Mỗi lệnh chờ hành trang cập nhật trước khi gửi lệnh tiếp; vì vậy tốc độ thực tế có thể chậm hơn. Nếu chờ cập nhật quá 10 giây, đợt dừng mà không gửi lại lệnh chưa được xác nhận.
+- Tắt **Theo ô bánh**, tắt tùy chọn ở Tab Bánh, xóa ID `1581`, dừng Auto Gộp/Auto Dùng Nhanh hoặc ngắt kết nối sẽ hủy đợt đang chạy.
+
+### File và xác minh
+
+- Source chạy thật: `DecompiledSource/Game1.Mod/AutoGop.cs`, `Game2.Mod/AutoGop.cs`, `Game1.Mod/AutoDungNhanh.cs`, `Game2.Mod/AutoDungNhanh.cs`. Logic Game1 và Game2 đã được kiểm tra tương đồng sau khi đổi namespace. Các bản `MyMod/AutoGop_Game*.cs` và `MyMod/AutoDungNhanh_Game*.cs` là bản sao cũ, không thuộc pipeline build này nên không được ghi đè bằng source khác đời.
+- Kịch bản C# tại `MyMod/RubyBoxTests/` biên dịch trực tiếp source Game1: **23 PASS, 0 FAIL**, không cảnh báo. Đã kiểm tra mặc định, hai điều kiện bật, lỗi không khớp, tín hiệu trùng, số lượng xác nhận qua hành trang, hết hộp, timeout, dừng/hủy và tiếp tục các item khác. Kiểm tra diff không có lỗi khoảng trắng; Game1 và Game2 khớp logic.
+- `MyMod/build_mod.ps1` build thành công và cập nhật `ProjCompleted_Data/Managed/Assembly-CSharp.dll`: **0 lỗi**, toàn dự án có **246 cảnh báo biên dịch**. `MyMod/do_backup.ps1` đã tạo `Backup/Backup_Snapshot_20261114_185722.zip`.
+
+### Giới hạn cần thử trong game
+
+- Giao thức hiện dùng lệnh mua đang chờ, khoảng thời gian 10 giây, đúng chuỗi thông báo và thay đổi hành trang để liên hệ lỗi với lần mua Bánh. Server không gửi mã giao dịch trong thông báo này, nên không thể chứng minh tuyệt đối nếu một thao tác khác đồng thời tạo đúng cùng thông báo.
+- Chưa thử trực tiếp trong game với server. Cần xác nhận mỗi lần dùng hộp làm hành trang cập nhật đúng như mô phỏng và quan sát tốc độ khi chạy đợt lớn `400000` hộp.

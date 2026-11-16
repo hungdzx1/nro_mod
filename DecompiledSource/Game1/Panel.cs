@@ -386,6 +386,12 @@ public class Panel : IActionListener, IChatable
 	public MyVector vFriendGD = new MyVector();
 
 	public MyVector vTop = new MyVector();
+	private readonly List<int> bossVisibleIndices = new List<int>();
+	private readonly HashSet<string> bossFavorites = new HashSet<string>();
+	private bool bossFavoritesLoaded;
+	private int bossFavoritesCharacterId = int.MinValue;
+	private bool bossFavoritesOnly;
+	private int bossLifeFilter;
 
 	public MyVector vEnemy = new MyVector();
 
@@ -1342,13 +1348,20 @@ public class Panel : IActionListener, IChatable
 		setType(0);
 		ITEM_HEIGHT = 24;
 		selected = (GameCanvas.isTouch ? (-1) : 0);
+		if (IsBossTop())
+		{
+			yScroll += 22;
+			hScroll -= 22;
+			LoadBossFavorites();
+			BuildBossVisibleIndices();
+		}
 		setTabTop();
 		isThachDau = t != 0;
 	}
 
 	public void setTabTop()
 	{
-		currentListLength = vTop.size();
+		currentListLength = IsBossTop() ? bossVisibleIndices.Count : vTop.size();
 		cmyLim = currentListLength * ITEM_HEIGHT - hScroll;
 		if (cmyLim < 0)
 		{
@@ -1368,6 +1381,105 @@ public class Panel : IActionListener, IChatable
 			selected = currentListLength - 1;
 		}
 		cmx = (cmtoX = 0);
+	}
+
+	private bool IsBossTop()
+	{
+		return type == 15 && topName != null && topName.Trim().Equals("Boss", StringComparison.OrdinalIgnoreCase);
+	}
+
+	private string BossFavoriteKey(TopInfo boss)
+	{
+		return (boss.name ?? string.Empty).Trim().ToLowerInvariant() + "|" + boss.rank;
+	}
+
+	private void LoadBossFavorites()
+	{
+		int characterId = Char.myCharz().charID;
+		if (bossFavoritesLoaded && bossFavoritesCharacterId == characterId)
+		{
+			return;
+		}
+		bossFavoritesLoaded = true;
+		bossFavoritesCharacterId = characterId;
+		bossFavorites.Clear();
+		string saved = Rms.loadRMSString("bossFavorites_" + characterId);
+		if (string.IsNullOrEmpty(saved))
+		{
+			return;
+		}
+		foreach (string key in saved.Split('\n'))
+		{
+			if (key.Length > 0)
+			{
+				bossFavorites.Add(key);
+			}
+		}
+	}
+
+	private bool IsBossDead(TopInfo boss)
+	{
+		return boss.info != null && (boss.info.IndexOf("chết", StringComparison.OrdinalIgnoreCase) >= 0 || boss.info.IndexOf("dead", StringComparison.OrdinalIgnoreCase) >= 0);
+	}
+
+	private bool IsBossAlive(TopInfo boss)
+	{
+		return !IsBossDead(boss) && boss.info != null && boss.info.IndexOf("HP:", StringComparison.OrdinalIgnoreCase) >= 0;
+	}
+
+	private void BuildBossVisibleIndices()
+	{
+		bossVisibleIndices.Clear();
+		for (int pass = 0; pass < 2; pass++)
+		{
+			for (int i = 0; i < vTop.size(); i++)
+			{
+				TopInfo boss = (TopInfo)vTop.elementAt(i);
+				bool favorite = bossFavorites.Contains(BossFavoriteKey(boss));
+				bool dead = IsBossDead(boss);
+				if (favorite != (pass == 0) || (bossFavoritesOnly && !favorite) || (bossLifeFilter == 1 && !IsBossAlive(boss)) || (bossLifeFilter == 2 && !dead))
+				{
+					continue;
+				}
+				bossVisibleIndices.Add(i);
+			}
+		}
+	}
+
+	private void RefreshBossVisibleIndices(bool resetScroll)
+	{
+		BuildBossVisibleIndices();
+		cmyLast[currentTabIndex] = resetScroll ? 0 : cmy;
+		selected = (GameCanvas.isTouch || bossVisibleIndices.Count == 0) ? (-1) : 0;
+		setTabTop();
+	}
+
+	private void ToggleBossFavorite(TopInfo boss)
+	{
+		string key = BossFavoriteKey(boss);
+		if (!bossFavorites.Add(key))
+		{
+			bossFavorites.Remove(key);
+		}
+		Rms.saveRMSString("bossFavorites_" + Char.myCharz().charID, string.Join("\n", new List<string>(bossFavorites).ToArray()));
+		RefreshBossVisibleIndices(false);
+	}
+
+	private void PaintBossFilters(mGraphics g)
+	{
+		int y = yScroll - 22;
+		int width = wScroll / 3;
+		string[] labels = new string[3] { "Yêu thích", "Còn sống", "Đã chết" };
+		bool[] active = new bool[3] { bossFavoritesOnly, bossLifeFilter == 1, bossLifeFilter == 2 };
+		g.setClip(xScroll, y, wScroll, 22);
+		for (int i = 0; i < 3; i++)
+		{
+			int x = xScroll + i * width;
+			int buttonWidth = (i == 2) ? (wScroll - i * width) : width;
+			g.setColor(active[i] ? 9541120 : 15196114);
+			g.fillRect(x + 1, y + 1, buttonWidth - 2, 19, 4);
+			(active[i] ? mFont.tahoma_7b_white : mFont.tahoma_7b_dark).drawString(g, labels[i], x + buttonWidth / 2, y + 5, mFont.CENTER);
+		}
 	}
 
 	public void setTabFriend()
@@ -2143,6 +2255,28 @@ public class Panel : IActionListener, IChatable
 			if (!isClanOption)
 			{
 				updateKeyInTabBar();
+			}
+			if (IsBossTop() && GameCanvas.isPointerJustRelease && GameCanvas.isPointer(xScroll, yScroll - 22, wScroll, 22))
+			{
+				int column = (GameCanvas.px - xScroll) * 3 / wScroll;
+				if (column == 0)
+				{
+					bossFavoritesOnly = !bossFavoritesOnly;
+				}
+				else if (column == 1)
+				{
+					bossLifeFilter = (bossLifeFilter == 1) ? 0 : 1;
+				}
+				else
+				{
+					bossLifeFilter = (bossLifeFilter == 2) ? 0 : 2;
+				}
+				waitToPerform = 0;
+				RefreshBossVisibleIndices(true);
+				GameCanvas.isPointerJustRelease = false;
+				GameCanvas.isPointerClick = false;
+				SoundMn.gI().panelClick();
+				return;
 			}
 			switch (type)
 			{
@@ -4496,11 +4630,19 @@ public class Panel : IActionListener, IChatable
 
 	public void paintTop(mGraphics g)
 	{
+		if (IsBossTop())
+		{
+			PaintBossFilters(g);
+		}
 		g.setClip(xScroll, yScroll, wScroll, hScroll);
 		g.translate(0, -cmy);
 		g.setColor(0);
 		if (currentListLength == 0)
 		{
+			if (IsBossTop())
+			{
+				mFont.tahoma_7b_dark.drawString(g, "Không có boss phù hợp", xScroll + wScroll / 2, yScroll + 18, mFont.CENTER);
+			}
 			return;
 		}
 		int num = (cmy + hScroll) / 24 + 1;
@@ -4535,7 +4677,7 @@ public class Panel : IActionListener, IChatable
 			g.fillRect(num6, num7, num8, num9, 5);
 			g.setColor((i != selected) ? 9993045 : 9541120);
 			g.fillRect(num3, num4, num5, h, 5);
-			TopInfo topInfo = (TopInfo)vTop.elementAt(i);
+			TopInfo topInfo = (TopInfo)vTop.elementAt(IsBossTop() ? bossVisibleIndices[i] : i);
 			if (topInfo.headICON != -1)
 			{
 				SmallImage.drawSmallImage(g, topInfo.headICON, num3, num4, 0, 0);
@@ -8392,18 +8534,26 @@ public class Panel : IActionListener, IChatable
 
 	private void doFireTop()
 	{
-		if (selected >= -1)
+		if (selected < 0 || selected >= currentListLength)
 		{
-			if (isThachDau)
-			{
-				Service.gI().sendTop(topName, (sbyte)selected);
-				return;
-			}
-			MyVector myVector = new MyVector(string.Empty);
-			myVector.addElement(new Command(mResources.CHAR_ORDER[0], this, 9999, (TopInfo)vTop.elementAt(selected)));
-			GameCanvas.menu.startAt(myVector, X, (selected + 1) * ITEM_HEIGHT - cmy + yScroll);
-			addThachDauDetail((TopInfo)vTop.elementAt(selected));
+			return;
 		}
+		int originalIndex = IsBossTop() ? bossVisibleIndices[selected] : selected;
+		if (isThachDau)
+		{
+			Service.gI().sendTop(topName, (sbyte)originalIndex);
+			return;
+		}
+		MyVector myVector = new MyVector(string.Empty);
+		myVector.addElement(new Command(mResources.CHAR_ORDER[0], this, 9999, (TopInfo)vTop.elementAt(originalIndex)));
+		if (IsBossTop())
+		{
+			TopInfo boss = (TopInfo)vTop.elementAt(originalIndex);
+			string label = bossFavorites.Contains(BossFavoriteKey(boss)) ? "Bỏ yêu thích" : "Yêu thích";
+			myVector.addElement(new Command(label, this, 1181296, boss));
+		}
+		GameCanvas.menu.startAt(myVector, X, (selected + 1) * ITEM_HEIGHT - cmy + yScroll);
+		addThachDauDetail((TopInfo)vTop.elementAt(originalIndex));
 	}
 
 	private void doFireMapTrans()
@@ -10081,6 +10231,10 @@ public class Panel : IActionListener, IChatable
 			}
 			ModFunc.GI().MyChatTextField(chatTField, "Nhập số sao cần đập", "Chỉ được nhập số");
 			break;
+		}
+		if (idAction == 1181296 && p is TopInfo bossFavorite && IsBossTop())
+		{
+			ToggleBossFavorite(bossFavorite);
 		}
 		if (idAction == 9999)
 		{

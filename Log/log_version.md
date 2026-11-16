@@ -2,6 +2,40 @@
 
 > Quy tắc: Chỉ ghi/cập nhật file này khi người dùng yêu cầu trực tiếp.
 
+## [17/11/2026 02:01:51 (+07:00)] — Cập nhật v3.2.1: Máy dò boss
+
+- **Phiên bản:** `v3.2.1`.
+- **Nội dung:** Panel máy dò boss (vật phẩm `1296`) cho phép đánh dấu/bỏ yêu thích bằng nút cạnh `Thách đấu` trong menu của boss. Boss yêu thích được ghim lên đầu; có nút chỉ hiện boss yêu thích và nút bật/tắt danh sách `Còn sống`/`Đã chết`. Danh sách rỗng có thông báo phù hợp. Yêu thích được lưu riêng theo nhân vật.
+- **Luồng chọn boss:** Giữ chỉ số boss gốc khi sắp xếp hoặc lọc để nút `Thách đấu` chọn đúng boss; đồng bộ triển khai Game1/Game2.
+- **Kiểm thử:** `MyMod/BossPanelTests.ps1` PASS 8 kịch bản lọc/chọn boss, kiểm tra hai bản mã đồng bộ; `git diff --check` PASS. Build mod thành công với `0` lỗi và `246` cảnh báo biên dịch. Chưa kiểm thử trực tiếp trong game.
+- **DLL đã cập nhật:** `ProjCompleted_Data/Managed/Assembly-CSharp.dll` (`1.821.184` byte, SHA-256 `E8D3C8E84977C0E73DD12E75D6B6B368542F90525435B8F8AFFE9D6DB023C5D1`).
+- **Sao lưu trước khi ghi log:** `Backup/Backup_Snapshot_20261117_015824.zip` (`2.594.189` byte).
+
+## [17/11/2026 02:37:17 (+07:00)] — Bổ sung v3.2.1: Lưu cài đặt auto theo cửa sổ
+
+- **Nội dung:** Auto Gộp lưu các tùy chọn, thứ tự, mục tiêu, điều kiện dừng, chuyển tab và delay. Dùng Nhanh lưu delay, tùy chọn, danh sách vật phẩm và trạng thái bật/tắt của từng vật phẩm. Khi mở lại game, cài đặt được khôi phục theo số phiên cửa sổ; tiến trình auto không tự chạy lại.
+- **Dùng cho auto sau này:** `DecompiledSource/AutoSettingsStore.cs` cung cấp cơ chế lưu/đọc cài đặt chung; mỗi auto dùng mã định danh riêng và đánh dấu các trường cấu hình cần lưu. Dữ liệu được tách theo cửa sổ qua `NroInstanceProfile`.
+- **Kiểm thử:** `AutoSettingsTests` **57/57 PASS**, `RubyBoxTests` **38/38 PASS**, `NroInstanceTests` **9/9 PASS**; mã Game1/Game2 của hai auto đồng bộ. Bộ `AutoGopTests` cũ chưa biên dịch được do còn tham chiếu các hàm đã không còn trong mã hiện tại.
+- **Build:** `0` lỗi, `246` cảnh báo biên dịch. DLL `ProjCompleted_Data/Managed/Assembly-CSharp.dll` (`1.826.816` byte, SHA-256 `79431DDEB669EC3A40CB1DCEE8632190844CACB5C7B13AB6E206636C7AF64C4F`). Chưa kiểm thử trực tiếp trong game.
+- **Sao lưu:** `Backup/Backup_Snapshot_20261117_023643.zip` (`3.029.515` byte), đã kiểm tra chứa DLL và lớp lưu cài đặt.
+
+## [14/11/2026 23:58:23 (+07:00)] — Cập nhật Delay Dùng nhanh cho v3.2
+
+- **Phiên bản:** `v3.2` tại `C:\Users\admin\Documents\NRO_FARM\NRO_V3.2`.
+- **Nội dung:** Panel Dùng nhanh nhận Delay từ `1` đến `60.000 ms`, gồm các giá trị dưới `50 ms`; mặc định vẫn `200 ms`. Áp dụng cho Game1 và Game2. Đợt dùng hộp `1581` vẫn chờ xác nhận số lượng trong hành trang trước khi gửi lệnh tiếp theo.
+- **Kiểm thử:** `RubyBoxTests` **38/38 PASS**; kiểm tra mã Game1/Game2 đồng bộ và điều kiện Delay đều PASS. Build mod thành công với `0` lỗi, `246` cảnh báo của dự án. Chưa kiểm thử trực tiếp trong game.
+- **DLL đã cập nhật:** `ProjCompleted_Data/Managed/Assembly-CSharp.dll` (`1.817.088` byte); SHA-256 tại dự án và NRO_V3.2 đều là `A71AC811CD9BEB4EB0A62C99B1062E5E6FF530BB06ADC7FBAED459C739A929F2`.
+- **Sao lưu DLL trước khi thay:** `ProjCompleted_Data/Managed/Assembly-CSharp.pre-delay-under50-20261114_235749.dll` trong NRO_V3.2.
+
+## [14/11/2026 19:23:32 (+07:00)] — Cập nhật bản mod v3.2
+
+- **Phiên bản:** `v3.2` tại `C:\Users\admin\Documents\NRO_FARM\NRO_V3.2`.
+- **Nội dung:** Bổ sung hộp hồng ngọc `1581` sẵn trong danh sách Dùng nhanh nhưng chờ tín hiệu; tab Bánh có tùy chọn tự dùng hộp (mặc định tắt, số lượng mặc định `400.000`). Chỉ phát một tín hiệu khi auto mua bánh thất bại **và** nhận thông báo `Bạn không đủ hồng ngọc`. Dùng nhanh ưu tiên `1581` đến khi đủ số lượng hoặc hết vật phẩm, sau đó tiếp tục các vật phẩm khác và sẵn sàng nhận tín hiệu mới. Tốc độ dùng `1581` theo delay ở panel Dùng nhanh.
+- **Kiểm thử trước build:** `RubyBoxTests` **23/23 PASS**, hai bản Game1/Game2 đồng bộ; `git diff --check` không có lỗi. Build thành công với `0` lỗi (`246` cảnh báo của dự án). Chưa kiểm thử trực tiếp trong game.
+- **DLL đã cập nhật:** `ProjCompleted_Data/Managed/Assembly-CSharp.dll` (`1.817.088` byte, SHA-256 `2080A679639970A789D2B51AD53F5D244FD6A9CE2B22C418BE3684D9F76E8C83`); mã băm DLL ở NRO_V3.2 khớp bản build.
+- **Sao lưu:** DLL cũ của NRO_V3.2 tại `ProjCompleted_Data/Managed/Assembly-CSharp.pre-v3.2-20261114_192331.dll` (`1.777.152` byte). Snapshot mã nguồn: `Backup/Backup_Snapshot_20261114_185722.zip`.
+- **Chi tiết triển khai:** `Kehoach/autogop_update.md`.
+
 ## [14/11/2026 04:26:40 (+07:00)] — Update giao dich nhan
 
 - **Thông báo phiên bản:** **Update giao dich nhan** (`v3.1`)

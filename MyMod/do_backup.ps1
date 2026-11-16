@@ -7,6 +7,12 @@ Copy-Item "$rootDir\ProjCompleted_Data\Managed\Assembly-CSharp.dll" "$backupDir\
 
 Write-Host "Đang sao lưu DecompiledSource..." -ForegroundColor Cyan
 $files = @(
+    'NroInstanceProfile.cs',
+    'AutoSettingsStore.cs',
+    'Game1\Main.cs',
+    'Game2\Main.cs',
+    'Game1\Rms.cs',
+    'Game2\Rms.cs',
     'Game1\ModFunc.cs',
     'Game2\ModFunc.cs',
     'Game1\Panel.cs',

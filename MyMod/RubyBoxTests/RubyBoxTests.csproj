@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>11.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>false</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\DecompiledSource\Game1.Mod\AutoGop.cs" Link="AutoGop.cs" />
+    <Compile Include="..\..\DecompiledSource\Game1.Mod\AutoDungNhanh.cs" Link="AutoDungNhanh.cs" />
+    <Compile Include="..\..\DecompiledSource\AutoSettingsStore.cs" Link="AutoSettingsStore.cs" />
+    <Compile Include="..\AutoSettingsTests\NroInstanceProfileStub.cs" Link="NroInstanceProfileStub.cs" />
+  </ItemGroup>
+</Project>

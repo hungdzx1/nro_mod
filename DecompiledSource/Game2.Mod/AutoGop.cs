@@ -19,31 +19,43 @@ public class AutoGop : IChatable
 
 	public int currentRunningTab; // Tab đang thực thi: 1 (Bánh), 2 (HN), 3 (Điểm), 4 (Zeno)
 
+	[AutoSetting]
 	public bool hideUi = true; // Ẩn hoàn toàn giao diện NPC / ô nhập khi chạy
 
 	// === TAB 0: CHUNG ===
+	[AutoSetting]
 	public bool enableBanh = true;
 
+	[AutoSetting]
 	public int orderBanh = 1;
 
+	[AutoSetting]
 	public bool enableHn = true;
 
+	[AutoSetting]
 	public int orderHn = 4;
 
+	[AutoSetting]
 	public bool enableDiem = true;
 
+	[AutoSetting]
 	public int orderDiem = 2;
 
+	[AutoSetting]
 	public bool enableZeno = true;
 
+	[AutoSetting]
 	public int orderZeno = 3;
 
+	[AutoSetting]
 	public bool autoChatMuaNhieu = true; // Checkbox [v] Bật Mua Nhiều (muanhieu)
 
 	public bool serverMuaNhieuEnabled;
 
+	[AutoSetting]
 	public int delayBetweenTabsMs = 500;
 
+	[AutoSetting]
 	public int targetWorkflowLoops = 0; // 0 = vô hạn
 
 	public int completedWorkflowLoops;
@@ -57,62 +69,95 @@ public class AutoGop : IChatable
 	private int queueIndex;
 
 	// === TAB 1: BÁNH (Item ID: 1337, NPC ID: 92) ===
+	[AutoSetting]
 	public int targetItemIdBanh = 1337;
 
 	public string targetItemNameBanh = "Bánh";
 
 	public sbyte targetBuyTypeBanh = 3;
 
+	[AutoSetting]
 	public int batchQtyBanh = 1000;
 
+	[AutoSetting]
 	public int targetBatchesBanh = 50; // 0 = vô hạn
 
+	[AutoSetting]
 	public int delayBuyBanhMs = 600;
 
+	[AutoSetting]
 	public int stopConditionBanh = 2; // 1: Đủ số lần HOẶC hết tài nguyên/hành trang đầy. 2: Số bánh trong rương đạt mốc
 
+	[AutoSetting]
 	public int targetItemCountBanh = 2000000; // Mốc số bánh trong rương cho Cách 2
 
+	[AutoSetting]
 	public int delayUseBanhMs = 200; // Delay khi dùng bánh
 
 	public int completedBatchesBanh;
 
+	[AutoSetting]
+	public bool autoUseRubyBoxBanh;
+
+	[AutoSetting]
+	public int rubyBoxUseQuantityBanh = 400000;
+
+	private bool pendingBanhBuy;
+
+	private long pendingBanhBuyAtMs;
+
+	private int banhBagCountAtBuy;
+
 	private bool isUsingAllBanh;
 
 	// === TAB 2: HN (Item ID: 1581, NPC ID: 56) ===
+	[AutoSetting]
 	public int targetItemIdHn = 1581;
 
 	public string targetItemNameHn = "HN";
 
 	public sbyte targetBuyTypeHn = 3;
 
+	[AutoSetting]
 	public int batchQtyHn = 1000;
 
+	[AutoSetting]
 	public int targetBatchesHn = 0; // 0 = vô hạn
 
+	[AutoSetting]
 	public int delayBuyHnMs = 600;
 
+	[AutoSetting]
 	public bool autoUseHn = true; // Vừa mua vừa dùng vật phẩm
 
+	[AutoSetting]
 	public int stopConditionHn = 1; // 1: Đạt đủ số lượng. 2: Hết tài nguyên / hành trang đầy
 
+	[AutoSetting]
 	public bool enableRoutingHn = true; // Bật tính năng chuyển hướng cục bộ
 
+	[AutoSetting]
 	public int routeWhenConditionHn = 2; // Rẽ nhánh khi thỏa mãn ĐK 2 (Hết tài nguyên / đầy)
 
+	[AutoSetting]
 	public int routeTargetTabHn = 4; // Nhảy sang Tab Zeno (ID 4)
 
+	[AutoSetting]
 	public int routeDelayHnMs = 500; // Delay khi chuyển từ HN sang Zeno
 
 	public int completedBatchesHn;
 
 	// === TAB 3: ĐIỂM (NPC ID: 66) ===
+	[AutoSetting]
 	public int pointIndex = 0; // 0: 10Tr, 1: 5K, 2: 3K, 3: 200, 4: 50
 
+	[AutoSetting]
 	public int targetBatchesDiem = 1; // 0 = vô hạn
 
+	[AutoSetting]
 	public int delayDiemMs = 350;
 
+	[AutoSetting]
 	public int stopConditionDiem = 1; // 1: Đổi đủ số lượng. 2: Điểm hiện có < Điểm tối thiểu
 
 	public long currentDiemPoints = -1; // Điểm hiện có cập nhật Real-time từ lời thoại Menu 1 NPC 66
@@ -126,16 +171,22 @@ public class AutoGop : IChatable
 	public static readonly string[] MocFullNames = new string[5] { "10.000.000đ", "5.000đ", "3.000đ", "200đ", "50đ" };
 
 	// === TAB 4: ZENO (Item ID: 1583, NPC ID: 18) ===
+	[AutoSetting]
 	public int batchQtyZeno = 19800; // Mặc định 19.800
 
+	[AutoSetting]
 	public int targetBatchesZeno = 1; // Mặc định 1
 
+	[AutoSetting]
 	public int delayZenoMs = 350;
 
+	[AutoSetting]
 	public int routeTargetWhenDoneZeno = 2; // Nhánh 1: Đổi đủ mục tiêu -> Nhảy sang Tab HN (2)
 
+	[AutoSetting]
 	public int routeTargetWhenLackZeno = 1; // Nhánh 2: Thiếu vé (< 19.800) -> Nhảy sang Tab Bánh (1)
 
+	[AutoSetting]
 	public int routeDelayZenoMs = 500; // Delay khi chuyển từ Zeno sang Bánh/HN
 
 	public int completedBatchesZeno;
@@ -165,9 +216,17 @@ public class AutoGop : IChatable
 
 	private bool isDragging;
 
+	private string lastSettingsSnapshot;
+
 	private int dragOffsetX;
 
 	private int dragOffsetY;
+
+	private AutoGop()
+	{
+		lastSettingsSnapshot = AutoSettingsStore.Load(this, "Game2.AutoGop");
+		pointIndex = System.Math.Max(0, System.Math.Min(MocShortNames.Length - 1, pointIndex));
+	}
 
 	public static AutoGop gI()
 	{
@@ -407,6 +466,12 @@ public class AutoGop : IChatable
 		}
 
 		Service.gI().buyItem(buyType, targetId, 0);
+		if (currentRunningTab == 1)
+		{
+			pendingBanhBuy = true;
+			pendingBanhBuyAtMs = mSystem.currentTimeMillis();
+			banhBagCountAtBuy = GetBagItemCount(targetItemIdBanh);
+		}
 		stepState = 4;
 		stateTimestamp = mSystem.currentTimeMillis();
 	}
@@ -548,6 +613,7 @@ public class AutoGop : IChatable
 
 	public void StartTab(int tabId)
 	{
+		pendingBanhBuy = false;
 		currentRunningTab = tabId;
 		isRunning = true;
 		stepState = 1;
@@ -660,6 +726,8 @@ public class AutoGop : IChatable
 
 	public void StopAll(string reason = "Đã dừng tất cả (F6)")
 	{
+		AutoDungNhanh.gI().CancelBanhBatch();
+		pendingBanhBuy = false;
 		isRunning = false;
 		isRunningWorkflow = false;
 		currentRunningTab = 0;
@@ -1035,8 +1103,34 @@ public class AutoGop : IChatable
 		{
 			return;
 		}
+		if (currentRunningTab == 1 && pendingBanhBuy && GetBagItemCount(targetItemIdBanh) > banhBagCountAtBuy)
+		{
+			pendingBanhBuy = false;
+		}
+		if (currentRunningTab == 1 && lower.Contains("bạn không đủ hồng ngọc") &&
+			(!autoUseRubyBoxBanh || !AutoDungNhanh.gI().followBanh))
+		{
+			pendingBanhBuy = false;
+		}
+
+		if (currentRunningTab == 1 && autoUseRubyBoxBanh &&
+			AutoDungNhanh.gI().followBanh && lower.Contains("bạn không đủ hồng ngọc"))
+		{
+			if (pendingBanhBuy && mSystem.currentTimeMillis() - pendingBanhBuyAtMs <= 10000)
+			{
+				AutoDungNhanh.gI().TryStartBanhBatch(rubyBoxUseQuantityBanh);
+				pendingBanhBuy = false;
+				stepState = 5;
+				stateTimestamp = mSystem.currentTimeMillis();
+			}
+			return;
+		}
 
 		bool isResourceEmptyOrBagFull = lower.Contains("hành trang đã đầy") || lower.Contains("chỗ trống") || lower.Contains("không đủ") || lower.Contains("còn thiếu") || lower.Contains("hết điểm") || lower.Contains("hết vé");
+		if (currentRunningTab == 1 && isResourceEmptyOrBagFull)
+		{
+			pendingBanhBuy = false;
+		}
 
 		if (isResourceEmptyOrBagFull)
 		{
@@ -1108,6 +1202,7 @@ public class AutoGop : IChatable
 		{
 			UpdateTouch();
 		}
+		AutoSettingsStore.SaveIfChanged(this, "Game2.AutoGop", ref lastSettingsSnapshot);
 
 		if (!isRunning)
 		{
@@ -1127,6 +1222,10 @@ public class AutoGop : IChatable
 		}
 
 		long now = mSystem.currentTimeMillis();
+		if (currentRunningTab == 1 && pendingBanhBuy && GetBagItemCount(targetItemIdBanh) > banhBagCountAtBuy)
+		{
+			pendingBanhBuy = false;
+		}
 
 		// Chờ delay chuyển tiếp giữa các Tab
 		if (stepState == 6)
@@ -1220,6 +1319,9 @@ public class AutoGop : IChatable
 				if (currentRunningTab == 1)
 				{
 					Service.gI().buyItem(targetBuyTypeBanh, targetItemIdBanh, 0);
+					pendingBanhBuy = true;
+					pendingBanhBuyAtMs = now;
+					banhBagCountAtBuy = GetBagItemCount(targetItemIdBanh);
 					stepState = 4;
 				}
 				else if (currentRunningTab == 2)
@@ -1318,6 +1420,7 @@ public class AutoGop : IChatable
 			case 13: delayBuyBanhMs = System.Math.Max(50, val); break;
 			case 14: targetItemCountBanh = System.Math.Max(1, val); break;
 			case 15: delayUseBanhMs = System.Math.Max(50, val); break;
+			case 16: rubyBoxUseQuantityBanh = System.Math.Max(1, val); break;
 			// Tab 2 HN
 			case 20: targetItemIdHn = System.Math.Max(0, val); break;
 			case 21: batchQtyHn = System.Math.Max(1, System.Math.Min(1000, val)); break;
@@ -1556,6 +1659,31 @@ public class AutoGop : IChatable
 				stopConditionBanh = 2;
 				GameCanvas.clearAllPointerEvent();
 				OpenInputField(14, "Mốc bánh trong rương cần đạt", "2000000");
+				return;
+			}
+			rY += 21;
+			if (GameCanvas.isPointerHoldIn(winX + 10, rY, 200, 16))
+			{
+				if (!autoUseRubyBoxBanh && !AutoDungNhanh.gI().IsItemAdded(1581))
+				{
+					GameScr.info1.addInfo("Cần có hộp hồng ngọc [1581] trong Auto Dùng Nhanh", 0);
+				}
+				else
+				{
+					autoUseRubyBoxBanh = !autoUseRubyBoxBanh;
+					if (!autoUseRubyBoxBanh)
+					{
+						AutoDungNhanh.gI().CancelBanhBatch();
+					}
+				}
+				GameCanvas.clearAllPointerEvent();
+				return;
+			}
+			rY += 18;
+			if (GameCanvas.isPointerHoldIn(inputX, rY, 54, 16))
+			{
+				GameCanvas.clearAllPointerEvent();
+				OpenInputField(16, "Số hộp hồng ngọc dùng mỗi lần", rubyBoxUseQuantityBanh.ToString());
 				return;
 			}
 		}
@@ -1909,11 +2037,16 @@ public class AutoGop : IChatable
 			rY += 20;
 			DrawRadio(g, labelX, rY, stopConditionBanh == 2, "Cách 2: Đạt mốc rương");
 			DrawInputBox(g, inputX, rY, 52, 16, targetItemCountBanh.ToString(), isGreenText: true);
+			rY += 21;
+			DrawCheckbox(g, labelX, rY, autoUseRubyBoxBanh, "Tự dùng hộp HN [1581]");
+			rY += 18;
+			mFont.tahoma_7_white.drawString(g, "Số hộp / tín hiệu:", labelX, rY + 2, mFont.LEFT);
+			DrawInputBox(g, inputX, rY, 52, 16, rubyBoxUseQuantityBanh.ToString(), isGreenText: true);
 
 			string noteBanh = (stopConditionBanh == 2)
 				? "(Đạt mốc rương -> Tự dùng hết bánh rồi chuyển)"
 				: "(Đủ số lần hoặc hết tài nguyên/đầy rương -> Dừng)";
-			mFont.tahoma_7_yellow.drawString(g, noteBanh, headerCenterX, winY + 181, mFont.CENTER);
+			mFont.tahoma_7_yellow.drawString(g, noteBanh, headerCenterX, winY + 190, mFont.CENTER);
 		}
 
 		// === NỘI DUNG TAB 2: HN ===

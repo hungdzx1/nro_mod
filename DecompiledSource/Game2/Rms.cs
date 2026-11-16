@@ -202,12 +202,12 @@ public class Rms
 	private static void __saveRMS(string filename, sbyte[] data)
 	{
 		string value = ByteArrayToString(ArrayCast.cast(data));
-		PlayerPrefs.SetString(filename + TabType.Tab2, value);
+		NroInstanceProfile.SetString(filename + TabType.Tab2, value);
 	}
 
 	private static sbyte[] __loadRMS(string filename)
 	{
-		string @string = PlayerPrefs.GetString(filename + TabType.Tab2);
+		string @string = NroInstanceProfile.GetString(filename + TabType.Tab2);
 		byte[] array;
 		try
 		{
@@ -227,12 +227,12 @@ public class Rms
 
 	public static void clearAll()
 	{
-		PlayerPrefs.DeleteAll();
+		NroInstanceProfile.ClearAll();
 	}
 
 	public static void DeleteStorage(string path)
 	{
-		PlayerPrefs.DeleteKey(path);
+		NroInstanceProfile.DeleteKey(path);
 	}
 
 	public static string ByteArrayToString(byte[] ba)
@@ -255,7 +255,7 @@ public class Rms
 	{
 		try
 		{
-			PlayerPrefs.DeleteKey(name);
+			NroInstanceProfile.DeleteKey(name);
 		}
 		catch (Exception ex)
 		{

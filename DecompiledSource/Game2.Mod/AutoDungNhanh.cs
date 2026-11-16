@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using UnityEngine;
 
 namespace Game2.Mod;
@@ -21,13 +22,30 @@ public class AutoDungNhanh : IChatable, IActionListener
 
 	public bool isRunning;
 
+	[AutoSetting]
 	public int delayMs = 200;
 
+	[AutoSetting]
 	public bool stopOnBagFull = true;
 
+	[AutoSetting]
 	public bool autoRemoveWhenEmpty = true;
 
+	[AutoSetting]
 	public bool continuousRun;
+
+	[AutoSetting]
+	public bool followBanh;
+
+	public bool isBanhBatchRunning;
+
+	public int banhBatchRemaining;
+
+	private int banhBatchLastBagCount;
+
+	private bool banhUsePending;
+
+	private long banhUseSentAtMs;
 
 	public long lastUseTimeMs;
 
@@ -54,6 +72,97 @@ public class AutoDungNhanh : IChatable, IActionListener
 	private int dragOffsetY;
 
 	private const int RowsPerPage = 4;
+
+	private string lastSettingsSnapshot;
+
+	private bool runAllowed;
+
+	[AutoSetting]
+	private string SavedItems
+	{
+		get
+		{
+			StringBuilder result = new StringBuilder();
+			foreach (FastUseEntry entry in items)
+			{
+				result.Append(entry.itemId).Append(',').Append(entry.enabled ? '1' : '0').Append(',')
+					.Append(Convert.ToBase64String(Encoding.UTF8.GetBytes(entry.itemName ?? string.Empty))).Append(';');
+			}
+			return result.ToString();
+		}
+		set
+		{
+			if (value == null || value.Length > 65536)
+			{
+				return;
+			}
+			items.Clear();
+			foreach (string entry in value.Split(';'))
+			{
+				if (items.Count >= 256)
+				{
+					break;
+				}
+				string[] parts = entry.Split(',');
+				if (parts.Length != 3 || !int.TryParse(parts[0], out int id) || id < 0 ||
+					(parts[1] != "0" && parts[1] != "1") || IsItemAdded(id))
+				{
+					continue;
+				}
+				try
+				{
+					string name = Encoding.UTF8.GetString(Convert.FromBase64String(parts[2]));
+					items.Add(new FastUseEntry { itemId = id, itemName = name.Length == 0 ? "ID " + id : name, enabled = parts[1] == "1" });
+				}
+				catch (FormatException)
+				{
+					// Ignore a damaged item entry.
+				}
+			}
+			ClampPaging();
+		}
+	}
+
+	private AutoDungNhanh()
+	{
+		items.Add(new FastUseEntry { itemId = 1581, itemName = "Hộp hồng ngọc", enabled = false });
+		lastSettingsSnapshot = AutoSettingsStore.Load(this, "Game2.AutoDungNhanh");
+		SetDelayMs(delayMs);
+	}
+
+	public bool TryStartBanhBatch(int quantity)
+	{
+		if (!followBanh || isBanhBatchRunning || quantity <= 0 || !IsItemAdded(1581))
+		{
+			return false;
+		}
+		int available = GetBagItemCount(1581);
+		if (available <= 0)
+		{
+			return false;
+		}
+		banhBatchRemaining = quantity;
+		banhBatchLastBagCount = available;
+		banhUsePending = false;
+		isBanhBatchRunning = true;
+		return true;
+	}
+
+	private void FinishBanhBatch(string reason)
+	{
+		isBanhBatchRunning = false;
+		banhUsePending = false;
+		banhBatchRemaining = 0;
+		if (!string.IsNullOrEmpty(reason))
+		{
+			GameScr.info1.addInfo(reason, 0);
+		}
+	}
+
+	public void CancelBanhBatch()
+	{
+		FinishBanhBatch(null);
+	}
 
 	public static AutoDungNhanh gI()
 	{
@@ -123,7 +232,7 @@ public class AutoDungNhanh : IChatable, IActionListener
 
 	public void SetDelayMs(int ms)
 	{
-		delayMs = System.Math.Max(50, System.Math.Min(60000, ms));
+		delayMs = System.Math.Max(1, System.Math.Min(60000, ms));
 	}
 
 	public void ToggleItemFromBag(Item item)
@@ -156,6 +265,7 @@ public class AutoDungNhanh : IChatable, IActionListener
 			itemName = itemName,
 			enabled = true
 		});
+		runAllowed = true;
 		isRunning = true;
 		lastUseTimeMs = 0L;
 		GameScr.info1.addInfo("Auto Dùng Nhanh: " + itemName + " (" + delayMs + "ms) [Z -> Auto nhanh]", 0);
@@ -198,6 +308,7 @@ public class AutoDungNhanh : IChatable, IActionListener
 			return;
 		}
 		isRunning = true;
+		runAllowed = true;
 		lastUseTimeMs = 0L;
 		GameScr.info1.addInfo("▶ Bắt đầu Auto Dùng Nhanh (" + delayMs + "ms)", 0);
 	}
@@ -205,6 +316,7 @@ public class AutoDungNhanh : IChatable, IActionListener
 	public void ToggleContinuousRun()
 	{
 		continuousRun = !continuousRun;
+		runAllowed = continuousRun;
 		if (continuousRun)
 		{
 			autoRemoveWhenEmpty = false;
@@ -227,10 +339,12 @@ public class AutoDungNhanh : IChatable, IActionListener
 
 	public void StopAll(string reason = null, bool disableContinuous = true)
 	{
+		FinishBanhBatch(null);
 		isRunning = false;
 		if (disableContinuous)
 		{
 			continuousRun = false;
+			runAllowed = false;
 		}
 		if (!string.IsNullOrEmpty(reason))
 		{
@@ -240,8 +354,10 @@ public class AutoDungNhanh : IChatable, IActionListener
 
 	public void OnDisconnectOrReset()
 	{
+		FinishBanhBatch(null);
 		isRunning = false;
 		continuousRun = false;
+		runAllowed = false;
 		isShowWindow = false;
 		isDragging = false;
 		editFieldMode = 0;
@@ -361,8 +477,51 @@ public class AutoDungNhanh : IChatable, IActionListener
 		{
 			UpdateTouch();
 		}
+		AutoSettingsStore.SaveIfChanged(this, "Game2.AutoDungNhanh", ref lastSettingsSnapshot);
 
-		if (continuousRun && !isRunning && HasEnabledItem())
+		if (isBanhBatchRunning)
+		{
+			if (!followBanh || !IsItemAdded(1581))
+			{
+				FinishBanhBatch(null);
+				return;
+			}
+			int currentCount = GetBagItemCount(1581);
+			if (currentCount < banhBatchLastBagCount)
+			{
+				banhBatchRemaining -= System.Math.Min(banhBatchRemaining, banhBatchLastBagCount - currentCount);
+				banhUsePending = false;
+				lastUseTimeMs = mSystem.currentTimeMillis();
+			}
+			banhBatchLastBagCount = currentCount;
+			if (banhBatchRemaining <= 0 || currentCount <= 0)
+			{
+				FinishBanhBatch("Đã kết thúc đợt dùng hộp hồng ngọc từ ô bánh");
+				return;
+			}
+			long batchNow = mSystem.currentTimeMillis();
+			if (banhUsePending)
+			{
+				if (batchNow - banhUseSentAtMs >= 10000)
+				{
+					FinishBanhBatch("Dừng dùng hộp hồng ngọc: không thấy hành trang cập nhật");
+				}
+				return;
+			}
+			if (batchNow - lastUseTimeMs >= delayMs)
+			{
+				int index = FindBagItemIndexUI(1581);
+				if (index >= 0)
+				{
+					Service.gI().useItem(0, 1, (sbyte)index, -1);
+					banhUsePending = true;
+					banhUseSentAtMs = batchNow;
+				}
+			}
+			return;
+		}
+
+		if (continuousRun && runAllowed && !isRunning && HasEnabledItem())
 		{
 			isRunning = true;
 			lastUseTimeMs = 0L;
@@ -453,14 +612,14 @@ public class AutoDungNhanh : IChatable, IActionListener
 	{
 		if (editFieldMode == 1)
 		{
-			if (!string.IsNullOrEmpty(text) && int.TryParse(text.Trim(), out var val))
+			if (!string.IsNullOrEmpty(text) && int.TryParse(text.Trim(), out var val) && val >= 1)
 			{
 				SetDelayMs(val);
 				GameScr.info1.addInfo("Đã đặt Delay Auto Nhanh: " + delayMs + " ms", 0);
 			}
 			else
 			{
-				GameScr.info1.addInfo("Vui lòng nhập số ms hợp lệ (>= 50)!", 0);
+				GameScr.info1.addInfo("Vui lòng nhập số ms hợp lệ (>= 1)!", 0);
 			}
 		}
 		onCancelChat();
@@ -521,7 +680,7 @@ public class AutoDungNhanh : IChatable, IActionListener
 		if (GameCanvas.isPointerHoldIn(delayBoxX, delayRowY, 58, 16))
 		{
 			GameCanvas.clearAllPointerEvent();
-			OpenInputField(1, "Delay Auto Dùng Nhanh (ms, >= 50)", delayMs.ToString());
+			OpenInputField(1, "Delay Auto Dùng Nhanh (ms, >= 1)", delayMs.ToString());
 			return;
 		}
 
@@ -542,10 +701,20 @@ public class AutoDungNhanh : IChatable, IActionListener
 
 		// Row 2b: Chạy liên tục
 		int optRow2Y = winY + 69;
-		if (GameCanvas.isPointerHoldIn(winX + 10, optRow2Y, 150, 15))
+		if (GameCanvas.isPointerHoldIn(winX + 10, optRow2Y, 102, 15))
 		{
 			GameCanvas.clearAllPointerEvent();
 			ToggleContinuousRun();
+			return;
+		}
+		if (GameCanvas.isPointerHoldIn(winX + 114, optRow2Y, 100, 15))
+		{
+			followBanh = !followBanh;
+			if (!followBanh)
+			{
+				FinishBanhBatch(null);
+			}
+			GameCanvas.clearAllPointerEvent();
 			return;
 		}
 
@@ -700,6 +869,7 @@ public class AutoDungNhanh : IChatable, IActionListener
 		// Row 2b: Chạy liên tục
 		int optRow2Y = winY + 69;
 		DrawCheckbox(g, winX + 12, optRow2Y, continuousRun, "Chạy liên tục");
+		DrawCheckbox(g, winX + 116, optRow2Y, followBanh, "Theo ô bánh");
 
 		// Row 3: List header & paging
 		int headerRowY = winY + 87;
@@ -760,7 +930,9 @@ public class AutoDungNhanh : IChatable, IActionListener
 		}
 
 		// Status
-		string statusText = isRunning
+		string statusText = isBanhBatchRunning
+			? ("Dùng hộp HN: còn " + banhBatchRemaining)
+			: isRunning
 			? ("Đang chạy (" + delayMs + " ms)" + (continuousRun ? " [Liên tục]" : ""))
 			: ("Trạng thái: Đang dừng (Phím Z)" + (continuousRun ? " [Liên tục]" : ""));
 		mFont.tahoma_7_yellow.drawString(g, statusText, headerCenterX, winY + 201, mFont.CENTER);

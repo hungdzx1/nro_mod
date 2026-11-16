@@ -86,6 +86,11 @@ public class Main : MonoBehaviour
 
 	private void Awake()
 	{
+		if (!NroInstanceProfile.EnsureUniqueSlot())
+		{
+			Application.Quit();
+			return;
+		}
 		if (main != null)
 		{
 			Management.tab = TabType.Tab2;
@@ -288,6 +293,7 @@ public class Main : MonoBehaviour
 	private void FixedUpdate()
 	{
 		Rms.update();
+		NroInstanceProfile.UpdateWindowTitle();
 		count++;
 		if (count >= 10)
 		{
