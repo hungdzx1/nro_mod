@@ -1156,6 +1156,8 @@ public class GameCanvas : IActionListener
 
 	public static void paintBGGameScr(mGraphics g)
 	{
+		g.translate(-g.getTranslateX(), -g.getTranslateY());
+		g.setClip(0, 0, w, h);
 		if (!isLoadBGok)
 		{
 			g.setColor(0);
@@ -2305,6 +2307,8 @@ public class GameCanvas : IActionListener
 		{
 			debugPaint.removeAllElements();
 			debug("PA", 1);
+			g.translate(-g.getTranslateX(), -g.getTranslateY());
+			g.setClip(0, 0, w, h);
 			if (currentScreen != null)
 			{
 				currentScreen.paint(g);

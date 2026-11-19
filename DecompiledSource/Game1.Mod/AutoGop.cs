@@ -262,6 +262,7 @@ public class AutoGop : IChatable
 		{
 			AutoMuaNhieu.gI().isShowWindow = false;
 			NpcMenuHelper.gI().isShowWindow = false;
+			AutoPhaLe.gI().isShowWindow = false;
 			if (GameCanvas.panel != null && GameCanvas.panel.isShow)
 			{
 				GameCanvas.panel.hideNow();

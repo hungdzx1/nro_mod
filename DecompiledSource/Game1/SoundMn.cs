@@ -299,13 +299,14 @@ public class SoundMn
 				(ModFunc.isInventory, ModFunc.strInventoryOFF),
 				(ModFunc.isEffectInven, ModFunc.strEffectOff)
 			},
-			new(bool, string)[5]
+			new(bool, string)[6]
 			{
 				(ModFunc.GI().isIntroOff, ModFunc.strIntroOff),
 				(ModFunc.GiamDungLuong, ModFunc.strGiamDungLuong),
 				(ModFunc.isEditButton, ModFunc.strEditButton),
 				(ModFunc.isFilterItem, "Lọc đồ"),
-				(ModFunc.isVietnamese, "Gõ Tiếng Việt")
+				(ModFunc.isVietnamese, "Gõ Tiếng Việt"),
+				(false, "Auto Doanh Trại")
 			}
 		};
 		int currentTabIndex = GameCanvas.panel.currentTabIndex;

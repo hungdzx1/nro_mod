@@ -5283,8 +5283,9 @@ public class Char : IMapObject
 
 	private void PaintCharName_HP_MP_Overhead(mGraphics g)
 	{
-		Part part = GameScr.parts[getFHead(head)];
-		int num = CharInfo[cf][0][2] - part.pi[CharInfo[cf][0][0]].dy + 5;
+		Part part = GetPartSafe(getFHead(head));
+		PartImage piHead = GetPartImageSafe(part, CharInfo[cf][0][0]);
+		int num = CharInfo[cf][0][2] - ((piHead != null) ? piHead.dy : 0) + 5;
 		if ((isInvisiblez && !me) || (!me && TileMap.mapID == 113 && cy >= 360))
 		{
 			return;
@@ -5613,17 +5614,46 @@ public class Char : IMapObject
 		SmallImage.drawSmallImage(g, id[b], x + ((dir != 1) ? num : (-num)), y - num2, (dir != 1) ? 2 : 0, StaticObj.VCENTER_HCENTER);
 	}
 
+	private static Part GetPartSafe(int id)
+	{
+		if (GameScr.parts == null || id < 0 || id >= GameScr.parts.Length)
+		{
+			return null;
+		}
+		return GameScr.parts[id];
+	}
+
+	private static PartImage GetPartImageSafe(Part part, int idx)
+	{
+		if (part == null || part.pi == null || idx < 0 || idx >= part.pi.Length)
+		{
+			return null;
+		}
+		return part.pi[idx];
+	}
+
 	public void paintHeadWithXY(mGraphics g, int x, int y, int look)
 	{
-		Part part = GameScr.parts[head];
-		SmallImage.drawSmallImage(g, part.pi[CharInfo[0][0][0]].id, x + CharInfo[0][0][1] + part.pi[CharInfo[0][0][0]].dx - 3, y + 3, look, mGraphics.LEFT | mGraphics.BOTTOM);
+		Part part = GetPartSafe(head);
+		PartImage piHead = GetPartImageSafe(part, CharInfo[0][0][0]);
+		if (piHead != null)
+		{
+			SmallImage.drawSmallImage(g, piHead.id, x + CharInfo[0][0][1] + piHead.dx - 3, y + 3, look, mGraphics.LEFT | mGraphics.BOTTOM);
+		}
 	}
 
 	public void paintCharBody(mGraphics g, int cx, int cy, int cdir, int cf, bool isPaintBag)
 	{
-		ph = GameScr.parts[head];
-		pl = GameScr.parts[leg];
-		pb = GameScr.parts[body];
+		if (cf < 0 || cf >= CharInfo.Length)
+		{
+			cf = 0;
+		}
+		ph = GetPartSafe(head);
+		pl = GetPartSafe(leg);
+		pb = GetPartSafe(body);
+		PartImage piHead = GetPartImageSafe(ph, CharInfo[cf][0][0]);
+		PartImage piLeg = GetPartImageSafe(pl, CharInfo[cf][1][0]);
+		PartImage piBody = GetPartImageSafe(pb, CharInfo[cf][2][0]);
 		if (bag >= 0 && statusMe != 14)
 		{
 			if (!ClanImage.idImages.containsKey(bag + string.Empty))
@@ -5651,6 +5681,7 @@ public class Char : IMapObject
 			anchor2 = 0;
 			num2 = 1;
 		}
+		int bodyDy = ((piBody != null) ? piBody.dy : 0);
 		if (statusMe == 14)
 		{
 			if (GameCanvas.gameTick % 4 > 0)
@@ -5662,40 +5693,64 @@ public class Char : IMapObject
 			{
 				num3 = 15;
 			}
-			SmallImage.drawSmallImage(g, 834, cx, cy - CharInfo[cf][2][2] + pb.pi[CharInfo[cf][2][0]].dy - 2 + num3, num, StaticObj.TOP_CENTER);
+			SmallImage.drawSmallImage(g, 834, cx, cy - CharInfo[cf][2][2] + bodyDy - 2 + num3, num, StaticObj.TOP_CENTER);
 			SmallImage.drawSmallImage(g, 79, cx, cy - ch - 8, 0, mGraphics.HCENTER | mGraphics.BOTTOM);
-			SmallImage.drawSmallImage(g, ph.pi[CharInfo[cf][0][0]].id, cx + (CharInfo[cf][0][1] + ph.pi[CharInfo[cf][0][0]].dx) * num2, cy - CharInfo[cf][0][2] + ph.pi[CharInfo[cf][0][0]].dy, num, anchor);
-			paintHat_behind(g, cf, cy - CharInfo[cf][2][2] + pb.pi[CharInfo[cf][2][0]].dy);
+			if (piHead != null)
+			{
+				SmallImage.drawSmallImage(g, piHead.id, cx + (CharInfo[cf][0][1] + piHead.dx) * num2, cy - CharInfo[cf][0][2] + piHead.dy, num, anchor);
+			}
+			paintHat_behind(g, cf, cy - CharInfo[cf][2][2] + bodyDy);
 			if (isHead_2Fr(head))
 			{
-				Part part = GameScr.parts[getFHead(head)];
-				SmallImage.drawSmallImage(g, part.pi[CharInfo[cf][0][0]].id, cx + (CharInfo[cf][0][1] + part.pi[CharInfo[cf][0][0]].dx) * num2, cy - CharInfo[cf][0][2] + part.pi[CharInfo[cf][0][0]].dy, num, anchor);
+				PartImage piHead2 = GetPartImageSafe(GetPartSafe(getFHead(head)), CharInfo[cf][0][0]);
+				if (piHead2 != null)
+				{
+					SmallImage.drawSmallImage(g, piHead2.id, cx + (CharInfo[cf][0][1] + piHead2.dx) * num2, cy - CharInfo[cf][0][2] + piHead2.dy, num, anchor);
+				}
 			}
-			else
+			else if (piHead != null)
 			{
-				SmallImage.drawSmallImage(g, ph.pi[CharInfo[cf][0][0]].id, cx + (CharInfo[cf][0][1] + ph.pi[CharInfo[cf][0][0]].dx) * num2, cy - CharInfo[cf][0][2] + ph.pi[CharInfo[cf][0][0]].dy, num, anchor);
+				SmallImage.drawSmallImage(g, piHead.id, cx + (CharInfo[cf][0][1] + piHead.dx) * num2, cy - CharInfo[cf][0][2] + piHead.dy, num, anchor);
 			}
-			paintHat_front(g, cf, cy - CharInfo[cf][2][2] + pb.pi[CharInfo[cf][2][0]].dy);
-			paintRedEye(g, cx + (CharInfo[cf][0][1] + ph.pi[CharInfo[cf][0][0]].dx) * num2, cy - CharInfo[cf][0][2] + ph.pi[CharInfo[cf][0][0]].dy, num, anchor);
+			paintHat_front(g, cf, cy - CharInfo[cf][2][2] + bodyDy);
+			if (piHead != null)
+			{
+				paintRedEye(g, cx + (CharInfo[cf][0][1] + piHead.dx) * num2, cy - CharInfo[cf][0][2] + piHead.dy, num, anchor);
+			}
 		}
 		else
 		{
-			paintHat_behind(g, cf, cy - CharInfo[cf][2][2] + pb.pi[CharInfo[cf][2][0]].dy);
+			paintHat_behind(g, cf, cy - CharInfo[cf][2][2] + bodyDy);
 			if (isHead_2Fr(head))
 			{
-				Part part2 = GameScr.parts[getFHead(head)];
-				SmallImage.drawSmallImage(g, part2.pi[CharInfo[cf][0][0]].id, cx + (CharInfo[cf][0][1] + part2.pi[CharInfo[cf][0][0]].dx) * num2, cy - CharInfo[cf][0][2] + part2.pi[CharInfo[cf][0][0]].dy, num, anchor);
+				PartImage piHead2 = GetPartImageSafe(GetPartSafe(getFHead(head)), CharInfo[cf][0][0]);
+				if (piHead2 != null)
+				{
+					SmallImage.drawSmallImage(g, piHead2.id, cx + (CharInfo[cf][0][1] + piHead2.dx) * num2, cy - CharInfo[cf][0][2] + piHead2.dy, num, anchor);
+				}
 			}
-			else
+			else if (piHead != null)
 			{
-				SmallImage.drawSmallImage(g, ph.pi[CharInfo[cf][0][0]].id, cx + (CharInfo[cf][0][1] + ph.pi[CharInfo[cf][0][0]].dx) * num2, cy - CharInfo[cf][0][2] + ph.pi[CharInfo[cf][0][0]].dy, num, anchor);
+				SmallImage.drawSmallImage(g, piHead.id, cx + (CharInfo[cf][0][1] + piHead.dx) * num2, cy - CharInfo[cf][0][2] + piHead.dy, num, anchor);
 			}
-			SmallImage.drawSmallImage(g, pl.pi[CharInfo[cf][1][0]].id, cx + (CharInfo[cf][1][1] + pl.pi[CharInfo[cf][1][0]].dx) * num2, cy - CharInfo[cf][1][2] + pl.pi[CharInfo[cf][1][0]].dy, num, anchor);
-			SmallImage.drawSmallImage(g, pb.pi[CharInfo[cf][2][0]].id, cx + (CharInfo[cf][2][1] + pb.pi[CharInfo[cf][2][0]].dx) * num2, cy - CharInfo[cf][2][2] + pb.pi[CharInfo[cf][2][0]].dy, num, anchor);
-			paintRedEye(g, cx + (CharInfo[cf][0][1] + ph.pi[CharInfo[cf][0][0]].dx) * num2, cy - CharInfo[cf][0][2] + ph.pi[CharInfo[cf][0][0]].dy, num, anchor);
+			if (piLeg != null)
+			{
+				SmallImage.drawSmallImage(g, piLeg.id, cx + (CharInfo[cf][1][1] + piLeg.dx) * num2, cy - CharInfo[cf][1][2] + piLeg.dy, num, anchor);
+			}
+			if (piBody != null)
+			{
+				SmallImage.drawSmallImage(g, piBody.id, cx + (CharInfo[cf][2][1] + piBody.dx) * num2, cy - CharInfo[cf][2][2] + piBody.dy, num, anchor);
+			}
+			if (piHead != null)
+			{
+				paintRedEye(g, cx + (CharInfo[cf][0][1] + piHead.dx) * num2, cy - CharInfo[cf][0][2] + piHead.dy, num, anchor);
+			}
 		}
-		ch = ((isMonkey != 1 && !isFusion) ? (CharInfo[0][0][2] + ph.pi[CharInfo[0][0][0]].dy + 10) : 60);
-		int num4 = ((Res.abs(ph.pi[CharInfo[cf][0][0]].dy) < 22) ? ph.pi[CharInfo[cf][0][0]].dy : ((ph.pi[CharInfo[cf][0][0]].dy >= 0) ? (ph.pi[CharInfo[cf][0][0]].dy - 5) : (ph.pi[CharInfo[cf][0][0]].dy + 5)));
+		PartImage piHead0 = GetPartImageSafe(ph, CharInfo[0][0][0]);
+		int headDy0 = ((piHead0 != null) ? piHead0.dy : 0);
+		int headDyCf = ((piHead != null) ? piHead.dy : 0);
+		ch = ((isMonkey != 1 && !isFusion) ? (CharInfo[0][0][2] + headDy0 + 10) : 60);
+		int num4 = ((Res.abs(headDyCf) < 22) ? headDyCf : ((headDyCf >= 0) ? (headDyCf - 5) : (headDyCf + 5)));
 		cH_new = cy - CharInfo[cf][0][2] + num4;
 		if (statusMe == 1 && charID > 0 && !isMask && !isUseChargeSkill() && !isWaitMonkey && skillPaint == null && cf != 23 && bag < 0 && ((GameCanvas.gameTick + charID) % 30 == 0 || isFreez))
 		{

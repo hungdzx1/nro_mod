@@ -16,6 +16,22 @@ namespace Game1;
 
 public class ModFunc : IActionListener
 {
+	private sealed class FilterDropSettings
+	{
+		[AutoSetting]
+		public int delayMs = 500;
+	}
+
+	private readonly FilterDropSettings filterDropSettings = new FilterDropSettings();
+
+	private string filterDropSettingsSnapshot;
+
+	private ModFunc()
+	{
+		filterDropSettingsSnapshot = AutoSettingsStore.Load(filterDropSettings, "Game1.AutoFilterDrop");
+		filterDropSettings.delayMs = System.Math.Max(50, System.Math.Min(10000, filterDropSettings.delayMs));
+	}
+
 	public class Point
 	{
 		public int x;
@@ -553,6 +569,9 @@ public class ModFunc : IActionListener
 		case 104:
 			GameScr.gI().onChatFromMe("ukhu", string.Empty);
 			return true;
+		case 105:
+			Game1.Mod.AutoPhaLe.gI().ToggleWindow();
+			return true;
 		case 106:
 			ManualXmap.GI().LoadMapLeft();
 			return true;
@@ -577,7 +596,7 @@ public class ModFunc : IActionListener
 			UseItem(521);
 			return true;
 		case 117:
-			perform(42, null);
+			Game1.Mod.AutoDoanhTrai.gI().ToggleWindow();
 			return true;
 		case 119:
 			MoveTo(Char.myCharz().cx, Char.myCharz().cy - 100);
@@ -585,12 +604,16 @@ public class ModFunc : IActionListener
 		case 120:
 			OpenMenu();
 			return true;
+		case 121:
+			perform(42, null);
+			return true;
 		case 122:
 		{
 			MyVector myVector = new MyVector();
 			myVector.addElement(new Command("Auto nhanh", Game1.Mod.AutoDungNhanh.gI(), 100, null));
 			myVector.addElement(new Command("Bật/Tắt auto nhanh", Game1.Mod.AutoDungNhanh.gI(), 101, null));
 			myVector.addElement(new Command("GD nhanh", Game1.Mod.AutoGiaoDich.gI(), 100, null));
+			myVector.addElement(new Command("Pha lê nhanh", Game1.Mod.AutoPhaLe.gI(), 100, null));
 			GameCanvas.menu.startAt(myVector, 0);
 			return true;
 		}
@@ -1322,8 +1345,10 @@ public class ModFunc : IActionListener
 		AutoMuaNhieu.gI().Update();
 		AutoGop.gI().Update();
 		NpcMenuHelper.gI().Update();
+		Game1.Mod.AutoDoanhTrai.gI().Update();
 		Game1.Mod.AutoDungNhanh.gI().Update();
 		Game1.Mod.AutoGiaoDich.gI().Update();
+		Game1.Mod.AutoPhaLe.gI().Update();
 		ShowBoss.UpdateNotifications();
 		long num = mSystem.currentTimeMillis();
 		if (num - lastTimeKeepAlive >= 300000)
@@ -1394,7 +1419,7 @@ public class ModFunc : IActionListener
 			curSelectIntrinsic = "";
 			GameScr.info1.addInfo("Đã dừng auto mở nội tại", 0);
 		}
-		if (isAutoFilterItem && num - lastFilterTime >= 500)
+		if (isAutoFilterItem && num - lastFilterTime >= filterDropSettings.delayMs)
 		{
 			DoFilter();
 			lastFilterTime = num;
@@ -1576,13 +1601,13 @@ public class ModFunc : IActionListener
 		{
 			mFont.tahoma_7_white.drawStringBorder(g, TileMap.mapName + "  - K" + TileMap.zoneID, num - 5, num2, mFont.LEFT, mFont.tahoma_7_grey);
 		}
-		if (isAutoPhaLe && !isEditButton)
+		if (Game1.Mod.AutoPhaLe.gI().ShouldShowOldHud(isAutoPhaLe) && !isEditButton)
 		{
 			mFont.tahoma_7b_red.drawString(g, (itemPhale != null) ? itemPhale.template.name : "Chưa Có", GameCanvas.w / 2, 72, mFont.CENTER);
 			mFont.tahoma_7b_red.drawString(g, (itemPhale != null) ? ("Số Sao : " + currPhale) : "Số Sao : -1", GameCanvas.w / 2, 82, mFont.CENTER);
 			mFont.tahoma_7b_red.drawString(g, "Số Sao Cần Đập : " + maxPhale + " Sao", GameCanvas.w / 2, 92, mFont.CENTER);
 		}
-		if ((isAutoPhaLe || isAutoVQMM) && !isEditButton)
+		if ((Game1.Mod.AutoPhaLe.gI().ShouldShowOldHud(isAutoPhaLe) || isAutoVQMM) && !isEditButton)
 		{
 			Item item = FindItemBagWithIndexUI(FindItemIndex(457));
 			mFont.tahoma_7b_red.drawString(g, "Ngọc Xanh : " + NinjaUtil.getMoneys(Char.myCharz().luong) + " Ngọc Hồng : " + NinjaUtil.getMoneys(Char.myCharz().luongKhoa), GameCanvas.w / 2, 102, mFont.CENTER);
@@ -1624,6 +1649,8 @@ public class ModFunc : IActionListener
 		NpcMenuHelper.gI().Paint(g);
 		Game1.Mod.AutoDungNhanh.gI().Paint(g);
 		Game1.Mod.AutoGiaoDich.gI().Paint(g);
+		Game1.Mod.AutoPhaLe.gI().Paint(g);
+		Game1.Mod.AutoDoanhTrai.gI().Paint(g);
 		int num3 = 52;
 		if (notifBoss)
 		{
@@ -1852,6 +1879,7 @@ public class ModFunc : IActionListener
 					myVector.addElement(new Command("Nhặt xa\n" + (PickMob.IsPickItemsDis ? "[Bật]" : "[Tắt]"), 92));
 					myVector.addElement(new Command("Xem DS lọc đồ", 93));
 					myVector.addElement(new Command("Tự động lọc đồ", 94));
+					myVector.addElement(new Command("Delay lọc: " + filterDropSettings.delayMs + "ms", 96));
 					GameCanvas.menu.startAt(myVector, 4);
 					break;
 				}
@@ -1874,6 +1902,9 @@ public class ModFunc : IActionListener
 				case 94:
 					isAutoFilterItem = !isAutoFilterItem;
 					GameScr.info1.addInfo("Tự động lọc đồ " + (isAutoFilterItem ? "[Bật]" : "[Tắt]"), 0);
+					break;
+				case 96:
+					MyChatTextField(ChatTextField.gI(), "Delay lọc đồ", "Nhập 50-10000 ms");
 					break;
 				case 100:
 				{
@@ -3171,6 +3202,24 @@ public class ModFunc : IActionListener
 				GameCanvas.clearAllPointerEvent();
 			}
 		}
+	}
+
+	private void SaveFilterDropSettings()
+	{
+		AutoSettingsStore.SaveIfChanged(filterDropSettings, "Game1.AutoFilterDrop", ref filterDropSettingsSnapshot);
+	}
+
+	public void SetFilterDropDelay(string text)
+	{
+		if (string.IsNullOrWhiteSpace(text) || !int.TryParse(text.Trim(), out int delay) || delay < 50 || delay > 10000)
+		{
+			GameScr.info1.addInfo("Delay phải từ 50 đến 10000 ms", 0);
+			return;
+		}
+		filterDropSettings.delayMs = delay;
+		lastFilterTime = mSystem.currentTimeMillis();
+		SaveFilterDropSettings();
+		GameScr.info1.addInfo("Delay lọc đồ: " + delay + "ms", 0);
 	}
 
 	private void DoFilter()

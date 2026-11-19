@@ -160,6 +160,7 @@ public class AutoGiaoDich : IChatable, IActionListener
 		AutoMuaNhieu.gI().isShowWindow = false;
 		NpcMenuHelper.gI().isShowWindow = false;
 		AutoDungNhanh.gI().isShowWindow = false;
+		AutoPhaLe.gI().isShowWindow = false;
 	}
 
 	private void EnsureWindowInBounds()

@@ -917,78 +917,119 @@ public class Controller : IMessageHandler
 				{
 					string src = msg.reader().readUTF();
 					string src2 = msg.reader().readUTF();
-					GameCanvas.panel.setTypeCombine();
-					GameCanvas.panel.combineInfo = mFont.tahoma_7b_blue.splitFontArray(src, Panel.WIDTH_PANEL);
-					GameCanvas.panel.combineTopInfo = mFont.tahoma_7.splitFontArray(src2, Panel.WIDTH_PANEL);
-					GameCanvas.panel.show();
+					if (!Game1.Mod.AutoPhaLe.gI().ShouldSkipCombineEffect())
+					{
+						GameCanvas.panel.setTypeCombine();
+						GameCanvas.panel.combineInfo = mFont.tahoma_7b_blue.splitFontArray(src, Panel.WIDTH_PANEL);
+						GameCanvas.panel.combineTopInfo = mFont.tahoma_7.splitFontArray(src2, Panel.WIDTH_PANEL);
+						GameCanvas.panel.show();
+					}
 				}
 				if (b30 == 1)
 				{
-					GameCanvas.panel.vItemCombine.removeAllElements();
 					sbyte b31 = msg.reader().readByte();
-					for (int num118 = 0; num118 < b31; num118++)
+					if (Game1.Mod.AutoPhaLe.gI().ShouldSkipCombineEffect())
 					{
-						sbyte b32 = msg.reader().readByte();
-						for (int num119 = 0; num119 < Char.myCharz().arrItemBag.Length; num119++)
+						for (int num118 = 0; num118 < b31; num118++)
 						{
-							Item item3 = Char.myCharz().arrItemBag[num119];
-							if (item3 != null && item3.indexUI == b32)
-							{
-								item3.isSelect = true;
-								GameCanvas.panel.vItemCombine.addElement(item3);
-							}
+							msg.reader().readByte();
 						}
 					}
-					if (GameCanvas.panel.isShow)
+					else
 					{
-						GameCanvas.panel.setTabCombine();
+						GameCanvas.panel.vItemCombine.removeAllElements();
+						for (int num118 = 0; num118 < b31; num118++)
+						{
+							sbyte b32 = msg.reader().readByte();
+							for (int num119 = 0; num119 < Char.myCharz().arrItemBag.Length; num119++)
+							{
+								Item item3 = Char.myCharz().arrItemBag[num119];
+								if (item3 != null && item3.indexUI == b32)
+								{
+									item3.isSelect = true;
+									GameCanvas.panel.vItemCombine.addElement(item3);
+								}
+							}
+						}
+						if (GameCanvas.panel.isShow)
+						{
+							GameCanvas.panel.setTabCombine();
+						}
 					}
 				}
 				if (b30 == 2)
 				{
-					GameCanvas.panel.combineSuccess = 0;
-					GameCanvas.panel.setCombineEff(0);
+					if (!Game1.Mod.AutoPhaLe.gI().ShouldSkipCombineEffect())
+					{
+						GameCanvas.panel.combineSuccess = 0;
+						GameCanvas.panel.setCombineEff(0);
+					}
+					Game1.Mod.AutoPhaLe.gI().OnCombinePacket(b30);
 				}
 				if (b30 == 3)
 				{
-					GameCanvas.panel.combineSuccess = 1;
-					GameCanvas.panel.setCombineEff(0);
+					if (!Game1.Mod.AutoPhaLe.gI().ShouldSkipCombineEffect())
+					{
+						GameCanvas.panel.combineSuccess = 1;
+						GameCanvas.panel.setCombineEff(0);
+					}
+					Game1.Mod.AutoPhaLe.gI().OnCombinePacket(b30);
 				}
 				if (b30 == 4)
 				{
 					short iconID = msg.reader().readShort();
-					GameCanvas.panel.iconID3 = iconID;
-					GameCanvas.panel.combineSuccess = 0;
-					GameCanvas.panel.setCombineEff(1);
+					if (!Game1.Mod.AutoPhaLe.gI().ShouldSkipCombineEffect())
+					{
+						GameCanvas.panel.iconID3 = iconID;
+						GameCanvas.panel.combineSuccess = 0;
+						GameCanvas.panel.setCombineEff(1);
+					}
+					Game1.Mod.AutoPhaLe.gI().OnCombinePacket(b30);
 				}
 				if (b30 == 5)
 				{
 					short iconID2 = msg.reader().readShort();
-					GameCanvas.panel.iconID3 = iconID2;
-					GameCanvas.panel.combineSuccess = 0;
-					GameCanvas.panel.setCombineEff(2);
+					if (!Game1.Mod.AutoPhaLe.gI().ShouldSkipCombineEffect())
+					{
+						GameCanvas.panel.iconID3 = iconID2;
+						GameCanvas.panel.combineSuccess = 0;
+						GameCanvas.panel.setCombineEff(2);
+					}
+					Game1.Mod.AutoPhaLe.gI().OnCombinePacket(b30);
 				}
 				if (b30 == 6)
 				{
 					short iconID3 = msg.reader().readShort();
 					short iconID4 = msg.reader().readShort();
-					GameCanvas.panel.combineSuccess = 0;
-					GameCanvas.panel.setCombineEff(3);
-					GameCanvas.panel.iconID1 = iconID3;
-					GameCanvas.panel.iconID3 = iconID4;
+					if (!Game1.Mod.AutoPhaLe.gI().ShouldSkipCombineEffect())
+					{
+						GameCanvas.panel.combineSuccess = 0;
+						GameCanvas.panel.setCombineEff(3);
+						GameCanvas.panel.iconID1 = iconID3;
+						GameCanvas.panel.iconID3 = iconID4;
+					}
+					Game1.Mod.AutoPhaLe.gI().OnCombinePacket(b30);
 				}
 				if (b30 == 7)
 				{
 					short iconID5 = msg.reader().readShort();
-					GameCanvas.panel.iconID3 = iconID5;
-					GameCanvas.panel.combineSuccess = 0;
-					GameCanvas.panel.setCombineEff(4);
+					if (!Game1.Mod.AutoPhaLe.gI().ShouldSkipCombineEffect())
+					{
+						GameCanvas.panel.iconID3 = iconID5;
+						GameCanvas.panel.combineSuccess = 0;
+						GameCanvas.panel.setCombineEff(4);
+					}
+					Game1.Mod.AutoPhaLe.gI().OnCombinePacket(b30);
 				}
 				if (b30 == 8)
 				{
-					GameCanvas.panel.iconID3 = -1;
-					GameCanvas.panel.combineSuccess = 1;
-					GameCanvas.panel.setCombineEff(4);
+					if (!Game1.Mod.AutoPhaLe.gI().ShouldSkipCombineEffect())
+					{
+						GameCanvas.panel.iconID3 = -1;
+						GameCanvas.panel.combineSuccess = 1;
+						GameCanvas.panel.setCombineEff(4);
+					}
+					Game1.Mod.AutoPhaLe.gI().OnCombinePacket(b30);
 				}
 				short num120 = 21;
 				try
@@ -2454,6 +2495,7 @@ public class Controller : IMessageHandler
 					}
 				}
 				Game1.Mod.AutoGiaoDich.gI().OnBagUpdated();
+				Game1.Mod.AutoPhaLe.gI().OnBagUpdated();
 				break;
 			}
 			case -35:
@@ -3175,8 +3217,12 @@ public class Controller : IMessageHandler
 							array18[num179] = msg.reader().readUTF();
 						}
 						Game1.Mod.AutoGop.gI().ParseDiemPoints(text8, num177, array18);
-						GameScr.gI().createMenu(array18, npc4);
-						if ((!Game1.Mod.NpcMenuHelper.gI().isAutoRunning || Game1.Mod.NpcMenuHelper.gI().autoNpcId != num177 || !Game1.Mod.NpcMenuHelper.gI().hideUi) && (!Game1.Mod.AutoGop.gI().isRunning || !Game1.Mod.AutoGop.gI().hideUi))
+						bool suppressPhaLeUi = Game1.Mod.AutoPhaLe.gI().OnNpcMenu(num177, text8, array18);
+						if (!suppressPhaLeUi)
+						{
+							GameScr.gI().createMenu(array18, npc4);
+						}
+						if (!suppressPhaLeUi && (!Game1.Mod.NpcMenuHelper.gI().isAutoRunning || Game1.Mod.NpcMenuHelper.gI().autoNpcId != num177 || !Game1.Mod.NpcMenuHelper.gI().hideUi) && (!Game1.Mod.AutoGop.gI().isRunning || !Game1.Mod.AutoGop.gI().hideUi))
 						{
 							ChatPopup.addChatPopup(text8, 100000, npc4);
 						}
@@ -3203,8 +3249,12 @@ public class Controller : IMessageHandler
 				{
 				}
 				Game1.Mod.AutoGop.gI().ParseDiemPoints(chat2, num177, array19);
-				GameScr.gI().createMenu(array19, npc5);
-				if ((!Game1.Mod.NpcMenuHelper.gI().isAutoRunning || Game1.Mod.NpcMenuHelper.gI().autoNpcId != num177 || !Game1.Mod.NpcMenuHelper.gI().hideUi) && (!Game1.Mod.AutoGop.gI().isRunning || !Game1.Mod.AutoGop.gI().hideUi))
+				bool suppressPhaLeUi2 = Game1.Mod.AutoPhaLe.gI().OnNpcMenu(num177, chat2, array19);
+				if (!suppressPhaLeUi2)
+				{
+					GameScr.gI().createMenu(array19, npc5);
+				}
+				if (!suppressPhaLeUi2 && (!Game1.Mod.NpcMenuHelper.gI().isAutoRunning || Game1.Mod.NpcMenuHelper.gI().autoNpcId != num177 || !Game1.Mod.NpcMenuHelper.gI().hideUi) && (!Game1.Mod.AutoGop.gI().isRunning || !Game1.Mod.AutoGop.gI().hideUi))
 				{
 					ChatPopup.addChatPopup(chat2, 100000, npc5);
 				}
@@ -3237,6 +3287,7 @@ public class Controller : IMessageHandler
 					string[] array17 = Char.myCharz().npcFocus.template.menu[num173];
 					myVector.addElement(new Command(array17[0], GameCanvas.instance, 88820, array17));
 				}
+				if (Game1.Mod.AutoDoanhTrai.gI().OnReceiveUiMenu(myVector, Char.myCharz().npcFocus)) return;
 				GameCanvas.menu.startAt(myVector, 3);
 				break;
 			}
@@ -3251,6 +3302,10 @@ public class Controller : IMessageHandler
 					Npc npc2 = (Npc)GameScr.vNpc.elementAt(num160);
 					if (npc2.template.npcTemplateId == num159)
 					{
+						if (Game1.Mod.AutoPhaLe.gI().OnNpcSay(num159, str6))
+						{
+							return;
+						}
 						ChatPopup.addChatPopupMultiLine(str6, 100000, npc2);
 						GameCanvas.panel.hideNow();
 						return;
@@ -3267,6 +3322,10 @@ public class Controller : IMessageHandler
 				}
 				catch (Exception)
 				{
+				}
+				if (Game1.Mod.AutoPhaLe.gI().OnNpcSay(num159, str6))
+				{
+					break;
 				}
 				ChatPopup.addChatPopupMultiLine(str6, 100000, npc3);
 				GameCanvas.panel.hideNow();

@@ -30,3 +30,4 @@ Xây dựng chức năng **Auto Giao Dịch Nhanh** (`Z -> GD nhanh`, phím nón
 - **Kiểm tra đồng bộ `Game1` / `Game2` / `MyMod`:** PASS 100%.
 - **Build (`MyMod/build_mod.ps1`):** `0 Error(s)` (0 cảnh báo trong `AutoGiaoDich.cs`), cập nhật `ProjCompleted_Data/Managed/Assembly-CSharp.dll` (`1,810,432` bytes).
 - **Backup (`MyMod/do_backup.ps1`):** `Backup/Backup_Snapshot_20261114_042611.zip` (`2,117,004` bytes).
+

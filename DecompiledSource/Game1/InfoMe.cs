@@ -320,8 +320,10 @@ public class InfoMe
 		AutoMuaNhieu.gI().OnServerInfo(s);
 		Game1.Mod.AutoGop.gI().OnServerInfo(s);
 		Game1.Mod.NpcMenuHelper.gI().OnServerInfo(s);
+		Game1.Mod.AutoDoanhTrai.gI().OnServerInfo(s);
 		Game1.Mod.AutoDungNhanh.gI().OnServerInfo(s);
 		Game1.Mod.AutoGiaoDich.gI().OnServerInfo(s);
+		Game1.Mod.AutoPhaLe.gI().OnServerInfo(s);
 		if (ModFunc.GI().isAutoVQMM)
 		{
 			if (s.ToLower().Contains("hành trang đã đầy"))

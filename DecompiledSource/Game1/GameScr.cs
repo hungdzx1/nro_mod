@@ -1274,6 +1274,10 @@ public class GameScr : mScreen, IChatable
 
 	public void createMenu(string[] menu, Npc npc)
 	{
+		if (Game1.Mod.AutoDoanhTrai.gI().OnReceiveMenu(menu, npc))
+		{
+			return;
+		}
 		if (Game1.Mod.AutoGop.gI().OnReceiveMenu(menu, npc))
 		{
 			return;
@@ -4332,7 +4336,7 @@ public class GameScr : mScreen, IChatable
 			AutoXmap.Update();
 			ModFunc.GI().Update();
 		}
-		if (!AutoXmap.IsXmapRunning)
+		if (!AutoXmap.IsXmapRunning && !Game1.Mod.AutoDoanhTrai.gI().isRunning)
 		{
 			PickMob.Update();
 		}
@@ -4805,7 +4809,13 @@ public class GameScr : mScreen, IChatable
 			}
 			if (char3 != null && (!GameCanvas.panel.isShow || !GameCanvas.panel.isTypeShop()))
 			{
-				char3.paint(g);
+				try
+				{
+					char3.paint(g);
+				}
+				catch (Exception)
+				{
+				}
 			}
 		}
 		Char.myCharz().paint(g);
@@ -4827,8 +4837,14 @@ public class GameScr : mScreen, IChatable
 			}
 			if (char4 != null && (!GameCanvas.panel.isShow || !GameCanvas.panel.isTypeShop()) && char4.skillPaint != null && char4.skillInfoPaint() != null && char4.indexSkill < char4.skillInfoPaint().Length)
 			{
-				char4.paintCharWithSkill(g);
-				char4.paintMount2(g);
+				try
+				{
+					char4.paintCharWithSkill(g);
+					char4.paintMount2(g);
+				}
+				catch (Exception)
+				{
+				}
 			}
 		}
 		for (int num5 = 0; num5 < vItemMap.size(); num5++)
@@ -6275,6 +6291,14 @@ public class GameScr : mScreen, IChatable
 		else if (ChatTextField.gI().strChat == "Tăng đến mức" && text != string.Empty)
 		{
 			ModFunc.GI().SetIncreasePoint(text);
+			ChatTextField.gI().strChat = "Chat";
+			ChatTextField.gI().tfChat.name = "chat";
+			ChatTextField.gI().tfChat.setIputType(TField.INPUT_TYPE_ANY);
+			ChatTextField.gI().isShow = false;
+		}
+		else if (ChatTextField.gI().strChat == "Delay lọc đồ")
+		{
+			ModFunc.GI().SetFilterDropDelay(text);
 			ChatTextField.gI().strChat = "Chat";
 			ChatTextField.gI().tfChat.name = "chat";
 			ChatTextField.gI().tfChat.setIputType(TField.INPUT_TYPE_ANY);

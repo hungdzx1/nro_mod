@@ -1385,7 +1385,12 @@ public class Panel : IActionListener, IChatable
 
 	private bool IsBossTop()
 	{
-		return type == 15 && topName != null && topName.Trim().Equals("Boss", StringComparison.OrdinalIgnoreCase);
+		if (type != 15 || topName == null)
+		{
+			return false;
+		}
+		string name = topName.Trim();
+		return name.Equals("Boss", StringComparison.OrdinalIgnoreCase) || name.Equals("Boss VIP", StringComparison.OrdinalIgnoreCase);
 	}
 
 	private string BossFavoriteKey(TopInfo boss)
@@ -4596,14 +4601,35 @@ public class Panel : IActionListener, IChatable
 				num2 = cp.cy + 40;
 			}
 		}
-		if (partID != null)
+		if (partID != null && GameScr.parts != null && partID.Length >= 3)
 		{
-			Part part = GameScr.parts[partID[0]];
-			Part part2 = GameScr.parts[partID[1]];
-			Part part3 = GameScr.parts[partID[2]];
-			SmallImage.drawSmallImage(g, part.pi[Char.CharInfo[0][0][0]].id, num + Char.CharInfo[0][0][1] + part.pi[Char.CharInfo[0][0][0]].dx, num2 - Char.CharInfo[0][0][2] + part.pi[Char.CharInfo[0][0][0]].dy, 0, 0);
-			SmallImage.drawSmallImage(g, part2.pi[Char.CharInfo[0][1][0]].id, num + Char.CharInfo[0][1][1] + part2.pi[Char.CharInfo[0][1][0]].dx, num2 - Char.CharInfo[0][1][2] + part2.pi[Char.CharInfo[0][1][0]].dy, 0, 0);
-			SmallImage.drawSmallImage(g, part3.pi[Char.CharInfo[0][2][0]].id, num + Char.CharInfo[0][2][1] + part3.pi[Char.CharInfo[0][2][0]].dx, num2 - Char.CharInfo[0][2][2] + part3.pi[Char.CharInfo[0][2][0]].dy, 0, 0);
+			if (partID[0] >= 0 && partID[0] < GameScr.parts.Length)
+			{
+				Part part = GameScr.parts[partID[0]];
+				int idx0 = Char.CharInfo[0][0][0];
+				if (part != null && part.pi != null && idx0 >= 0 && idx0 < part.pi.Length && part.pi[idx0] != null)
+				{
+					SmallImage.drawSmallImage(g, part.pi[idx0].id, num + Char.CharInfo[0][0][1] + part.pi[idx0].dx, num2 - Char.CharInfo[0][0][2] + part.pi[idx0].dy, 0, 0);
+				}
+			}
+			if (partID[1] >= 0 && partID[1] < GameScr.parts.Length)
+			{
+				Part part2 = GameScr.parts[partID[1]];
+				int idx1 = Char.CharInfo[0][1][0];
+				if (part2 != null && part2.pi != null && idx1 >= 0 && idx1 < part2.pi.Length && part2.pi[idx1] != null)
+				{
+					SmallImage.drawSmallImage(g, part2.pi[idx1].id, num + Char.CharInfo[0][1][1] + part2.pi[idx1].dx, num2 - Char.CharInfo[0][1][2] + part2.pi[idx1].dy, 0, 0);
+				}
+			}
+			if (partID[2] >= 0 && partID[2] < GameScr.parts.Length)
+			{
+				Part part3 = GameScr.parts[partID[2]];
+				int idx2 = Char.CharInfo[0][2][0];
+				if (part3 != null && part3.pi != null && idx2 >= 0 && idx2 < part3.pi.Length && part3.pi[idx2] != null)
+				{
+					SmallImage.drawSmallImage(g, part3.pi[idx2].id, num + Char.CharInfo[0][2][1] + part3.pi[idx2].dx, num2 - Char.CharInfo[0][2][2] + part3.pi[idx2].dy, 0, 0);
+				}
+			}
 		}
 		else if (charInfo != null)
 		{
@@ -4678,25 +4704,33 @@ public class Panel : IActionListener, IChatable
 			g.setColor((i != selected) ? 9993045 : 9541120);
 			g.fillRect(num3, num4, num5, h, 5);
 			TopInfo topInfo = (TopInfo)vTop.elementAt(IsBossTop() ? bossVisibleIndices[i] : i);
+			if (topInfo == null)
+			{
+				continue;
+			}
 			if (topInfo.headICON != -1)
 			{
 				SmallImage.drawSmallImage(g, topInfo.headICON, num3, num4, 0, 0);
 			}
-			else
+			else if (GameScr.parts != null && topInfo.headID >= 0 && topInfo.headID < GameScr.parts.Length)
 			{
 				Part part = GameScr.parts[topInfo.headID];
-				SmallImage.drawSmallImage(g, part.pi[Char.CharInfo[0][0][0]].id, num3 + part.pi[Char.CharInfo[0][0][0]].dx, num4 + num9 - 1, 0, mGraphics.BOTTOM | mGraphics.LEFT);
+				int headPartIndex = Char.CharInfo[0][0][0];
+				if (part != null && part.pi != null && headPartIndex >= 0 && headPartIndex < part.pi.Length && part.pi[headPartIndex] != null)
+				{
+					SmallImage.drawSmallImage(g, part.pi[headPartIndex].id, num3 + part.pi[headPartIndex].dx, num4 + num9 - 1, 0, mGraphics.BOTTOM | mGraphics.LEFT);
+				}
 			}
 			g.setClip(xScroll, yScroll + cmy, wScroll, hScroll);
 			if (topInfo.pId != Char.myCharz().charID)
 			{
-				mFont.tahoma_7b_green.drawString(g, topInfo.name, num6 + 5, num7, 0);
+				mFont.tahoma_7b_green.drawString(g, topInfo.name ?? string.Empty, num6 + 5, num7, 0);
 			}
 			else
 			{
-				mFont.tahoma_7b_red.drawString(g, topInfo.name, num6 + 5, num7, 0);
+				mFont.tahoma_7b_red.drawString(g, topInfo.name ?? string.Empty, num6 + 5, num7, 0);
 			}
-			mFont.tahoma_7_blue.drawString(g, topInfo.info, num6 + num8 - 5, num7 + 11, 1);
+			mFont.tahoma_7_blue.drawString(g, topInfo.info ?? string.Empty, num6 + num8 - 5, num7 + 11, 1);
 			mFont.tahoma_7_green2.drawString(g, mResources.rank + ": " + topInfo.rank + string.Empty, num6 + 5, num7 + 11, 0);
 		}
 		paintScrollArrow(g);
@@ -8677,6 +8711,11 @@ public class Panel : IActionListener, IChatable
 			{
 				myVector.addElement(new Command("Nhập số sao", this, 8010, currItem));
 			}
+			if (Game2.Mod.AutoPhaLe.gI().allowAddFromBag && Game2.Mod.AutoPhaLe.CanAddItem(currItem))
+			{
+				myVector.addElement(new Command(Game2.Mod.AutoPhaLe.gI().IsItemInQueue(currItem) ? "Xóa khỏi\nDS Pha Lê" : "Thêm vào\nDS Pha Lê", Game2.Mod.AutoPhaLe.gI(), 1, currItem));
+				myVector.addElement(new Command(Game2.Mod.AutoPhaLe.gI().IsCompanionMaterial(currItem) ? "Bỏ chọn\nNL đi kèm" : "Đặt làm\nNL đi kèm", Game2.Mod.AutoPhaLe.gI(), 3, currItem));
+			}
 			if (currItem != null)
 			{
 				GameCanvas.menu.startAt(myVector, X, (selected + 1) * ITEM_HEIGHT - cmy + yScroll);
@@ -9024,6 +9063,12 @@ public class Panel : IActionListener, IChatable
 							myVector.addElement(new Command(ModFunc.strAddFilterItem, ModFunc.GI(), 502, currItem));
 						}
 					}
+				}
+				bool isBagSlotPhaLe = isnewInventory ? (newSelected != 0) : (!GetInventorySelect_isbody(selected, newSelected, Char.myCharz().arrItemBody));
+				if (Game2.Mod.AutoPhaLe.gI().allowAddFromBag && isBagSlotPhaLe && GameCanvas.panel.type != 13 && Game2.Mod.AutoPhaLe.CanAddItem(currItem))
+				{
+					myVector.addElement(new Command(Game2.Mod.AutoPhaLe.gI().IsItemInQueue(currItem) ? "Xóa khỏi\nDS Pha Lê" : "Thêm vào\nDS Pha Lê", Game2.Mod.AutoPhaLe.gI(), 1, currItem));
+					myVector.addElement(new Command(Game2.Mod.AutoPhaLe.gI().IsCompanionMaterial(currItem) ? "Bỏ chọn\nNL đi kèm" : "Đặt làm\nNL đi kèm", Game2.Mod.AutoPhaLe.gI(), 3, currItem));
 				}
 				GameCanvas.menu.startAt(myVector, X, (selected + 1) * ITEM_HEIGHT - cmy + yScroll);
 				addItemDetail(currItem);
@@ -10286,6 +10331,7 @@ public class Panel : IActionListener, IChatable
 			{
 				ModFunc.GI().itemPhale = item2;
 			}
+			Game2.Mod.AutoPhaLe.gI().OnCombineSlotItemAdded(item2, GameCanvas.panel.vItemCombine.size());
 		}
 		if (idAction == 7000)
 		{
@@ -10858,6 +10904,14 @@ public class Panel : IActionListener, IChatable
 			{
 				GameScr.info1.addInfo("Số sao đã nhập không đúng", 0);
 			}
+			chatTField.isShow = false;
+		}
+		else if (chatTField.strChat == "Delay lọc đồ")
+		{
+			ModFunc.GI().SetFilterDropDelay(text);
+			chatTField.strChat = "Chat";
+			chatTField.tfChat.name = "chat";
+			chatTField.tfChat.setIputType(TField.INPUT_TYPE_ANY);
 			chatTField.isShow = false;
 		}
 		else if (chatTField.strChat == "Cài ID phím tắt" && chatTField.tfChat.getText() != string.Empty)
@@ -11719,6 +11773,7 @@ public class Panel : IActionListener, IChatable
 				ModFunc.GI().isAutoPhaLe = !ModFunc.GI().isAutoPhaLe;
 				if (ModFunc.GI().isAutoPhaLe)
 				{
+					Game2.Mod.AutoPhaLe.gI().OnOldAutoToggledOn();
 					new Thread(ModFunc.GI().AutoPhaLe).Start();
 				}
 				GameScr.info1.addInfo("Đã " + (ModFunc.GI().isAutoPhaLe ? "bật" : "tắt") + " tự động pha lê", 0);
@@ -12310,6 +12365,8 @@ public class Panel : IActionListener, IChatable
 		if (type == 26)
 		{
 			SoundMn.gI().GetStrModFunc();
+			currentListLength = strModFunc.Length;
+			cmyLim = System.Math.Max(0, currentListLength * ITEM_HEIGHT - hScroll);
 			selected = 0;
 		}
 	}

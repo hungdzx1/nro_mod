@@ -751,6 +751,7 @@ public class ServerListScreen : mScreen, IActionListener
 		ModFunc.startAutoItem = false;
 		Game2.Mod.AutoDungNhanh.gI().OnDisconnectOrReset();
 		Game2.Mod.AutoGiaoDich.gI().OnDisconnectOrReset();
+		Game2.Mod.AutoPhaLe.gI().OnDisconnectOrReset();
 		mSystem.resetCurInapp();
 		base.switchToMe();
 	}

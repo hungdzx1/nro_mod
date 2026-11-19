@@ -322,6 +322,7 @@ public class InfoMe
 		Game2.Mod.NpcMenuHelper.gI().OnServerInfo(s);
 		Game2.Mod.AutoDungNhanh.gI().OnServerInfo(s);
 		Game2.Mod.AutoGiaoDich.gI().OnServerInfo(s);
+		Game2.Mod.AutoPhaLe.gI().OnServerInfo(s);
 		if (ModFunc.GI().isAutoVQMM)
 		{
 			if (s.ToLower().Contains("hành trang đã đầy"))

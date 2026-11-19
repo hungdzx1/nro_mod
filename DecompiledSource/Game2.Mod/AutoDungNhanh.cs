@@ -224,6 +224,7 @@ public class AutoDungNhanh : IChatable, IActionListener
 		AutoGop.gI().isShowWindow = false;
 		AutoMuaNhieu.gI().isShowWindow = false;
 		NpcMenuHelper.gI().isShowWindow = false;
+		AutoPhaLe.gI().isShowWindow = false;
 		if (GameCanvas.panel != null && GameCanvas.panel.isShow)
 		{
 			GameCanvas.panel.hideNow();

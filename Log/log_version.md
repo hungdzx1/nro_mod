@@ -2,6 +2,17 @@
 
 > Quy tắc: Chỉ ghi/cập nhật file này khi người dùng yêu cầu trực tiếp.
 
+## [18/11/2026 11:26:50 (+07:00)] — Cập nhật v3.2.2: Auto Doanh Trại
+
+- **Phiên bản:** `v3.2.2`.
+- **Nội dung:**
+  - **Giải tán bang tại Đảo Kame:** Chọn nút xác nhận giải tán theo vị trí đầu tiên (`index = 0`) thay cho chuỗi chữ cứng; ưu tiên tìm NPC Quy Lão theo ID `13` (`FindKame`), dịch chuyển thẳng tới vị trí Quy Lão (`MoveToNpc`) và tự thử mở lại menu nếu chưa nhận được phản hồi.
+  - **Chiến đấu & kỹ năng:** Tại map 3 (`59`), luôn ưu tiên đánh sạch quái thường (kể cả quái hồi sinh) trước Boss và qua map 4 ngay sau khi Boss chết; sửa `Skill boss thứ 3` áp dụng đúng cho Boss ở map 7 (`55`), bổ sung tùy chọn `Skill mặc định` trên bảng UI (`defaultSkillId`), tách riêng cooldown di chuyển (`lastMove`) và bỏ qua thông báo lỗi chiến đấu trong `Phase.Fight`; ở map 10 (`57`), đánh xong cả Boss lẫn quái rồi mới bay về Đảo Kame.
+  - **Nhặt vật phẩm rơi:** Tạm tắt `PickMob.Update()` khi `AutoDoanhTrai` đang chạy để tránh tranh nhặt và đốt lượt thử; sau khi dọn xong Boss/quái ở mỗi map, tự dịch chuyển tới tọa độ đất `(xEnd, yEnd)` nhặt sạch vật phẩm rơi (bao gồm đồ Đệ tử đánh rơi, giới hạn `MaxPickAttempts = 10` và chừa tiền tệ khi đầy rương) trước khi qua map hoặc bay về Đảo Kame.
+- **Kiểm thử:** `MyMod/AutoDoanhTraiTests.ps1` **98/98 PASS** (kiểm tra tĩnh & mô phỏng PowerShell); `git diff --check` PASS. Build mod thành công với `0` lỗi và `246` cảnh báo biên dịch (`0` cảnh báo trong `AutoDoanhTrai.cs`). Chưa kiểm thử trực tiếp trong game.
+- **DLL đã cập nhật:** `ProjCompleted_Data/Managed/Assembly-CSharp.dll` (`1.850.880` byte, SHA-256 `823E16C973E8973974CF99A331D0234D1772D312719EA8932101445B9D1783BC`).
+- **Sao lưu:** `Backup/Backup_Snapshot_20261118_112632.zip` (`3.066.999` byte).
+
 ## [17/11/2026 02:01:51 (+07:00)] — Cập nhật v3.2.1: Máy dò boss
 
 - **Phiên bản:** `v3.2.1`.

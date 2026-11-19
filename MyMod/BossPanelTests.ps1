@@ -1,4 +1,4 @@
-﻿$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $game1 = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $root 'DecompiledSource\Game1\Panel.cs')
 $game2 = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $root 'DecompiledSource\Game2\Panel.cs')
@@ -19,6 +19,7 @@ function Get-MethodSource([string]$source, [string]$signature) {
 }
 
 $signatures = @(
+    'private bool IsBossTop()',
     'private string BossFavoriteKey(TopInfo boss)',
     'private bool IsBossDead(TopInfo boss)',
     'private bool IsBossAlive(TopInfo boss)',
@@ -42,7 +43,10 @@ foreach ($source in @($game1, $game2)) {
         'RefreshBossVisibleIndices(false)',
         'Rms.saveRMSString("bossFavorites_"',
         'Rms.loadRMSString("bossFavorites_"',
-        'selected < 0 || selected >= currentListLength'
+        'selected < 0 || selected >= currentListLength',
+        'name.Equals("Boss VIP", StringComparison.OrdinalIgnoreCase)',
+        'else if (GameScr.parts != null && topInfo.headID >= 0 && topInfo.headID < GameScr.parts.Length)',
+        'if (partID != null && GameScr.parts != null && partID.Length >= 3)'
     )
     foreach ($fragment in $required) {
         if (-not $source.Contains($fragment)) { throw "Missing flow: $fragment" }
@@ -62,11 +66,14 @@ public class MyVector {
     public object elementAt(int index) { return rows[index]; }
 }
 public class BossPanelHarness {
+    public int type = 15;
+    public string topName = "Boss";
     public readonly MyVector vTop = new MyVector();
     private readonly List<int> bossVisibleIndices = new List<int>();
     private readonly HashSet<string> bossFavorites = new HashSet<string>();
     private bool bossFavoritesOnly;
     private int bossLifeFilter;
+    public bool CheckBossTop(int t, string name) { type = t; topName = name; return IsBossTop(); }
     public void Add(string name, int rank, string info) { vTop.rows.Add(new TopInfo { name = name, rank = rank, info = info }); }
     public void Favorite(int index) { bossFavorites.Add(BossFavoriteKey(vTop.rows[index])); }
     public void ClearFavorites() { bossFavorites.Clear(); }
@@ -89,6 +96,12 @@ function Assert-Visible([BossPanelHarness]$panel, [bool]$favoriteOnly, [int]$lif
     $panel.Filter($favoriteOnly, $life)
     if ($panel.Visible() -cne $expected) { throw "Expected [$expected], got [$($panel.Visible())]" }
 }
+
+if (-not $test.CheckBossTop(15, 'Boss')) { throw 'IsBossTop rejected Boss (1296)' }
+if (-not $test.CheckBossTop(15, 'Boss VIP')) { throw 'IsBossTop rejected Boss VIP (1728)' }
+if (-not $test.CheckBossTop(15, '  boss vip  ')) { throw 'IsBossTop rejected trimmed Boss VIP' }
+if ($test.CheckBossTop(15, 'Top Sức Mạnh')) { throw 'IsBossTop accepted non-boss top panel' }
+if ($test.CheckBossTop(0, 'Boss VIP')) { throw 'IsBossTop accepted non-top panel type' }
 
 Assert-Visible $test $false 0 '1,2,0,3,4'
 Assert-Visible $test $false 1 '2,0'
