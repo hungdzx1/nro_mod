@@ -1,6 +1,7 @@
 using System;
 using Game1.Assets.src.e;
 using Game1.Assets.src.g;
+using Game1.Mod;
 using UnityEngine;
 
 namespace Game1;
@@ -841,6 +842,8 @@ public class Char : IMapObject
 
 	public short idAuraEff = -1;
 
+	public bool lodSkip;
+
 	public static bool isPaintAura;
 
 	public static bool isPaintAura2;
@@ -946,6 +949,22 @@ public class Char : IMapObject
 	public bool wearingVoHinh;
 
 	public bool teleport;
+
+	private short auraKeyFor = -2;
+
+	private string auraKey0;
+
+	private string auraKey1;
+
+	private int mountKeyFor = int.MinValue;
+
+	private string mountKey0;
+
+	private string mountKey1;
+
+	private int bagKeyFor = -1;
+
+	private string bagKey;
 
 	public Char()
 	{
@@ -4000,8 +4019,8 @@ public class Char : IMapObject
 			}
 			if (idMount >= ID_NEW_MOUNT)
 			{
-				FrameImage fraImage = mSystem.getFraImage(strMount + (idMount - ID_NEW_MOUNT) + "_0");
-				fraImage?.drawFrame(frameNewMount / 2 % fraImage.nFrame, xMount, yMount + fy, transMount, 3, g);
+				FrameImage mountFra = GetMountFra(0);
+				mountFra?.drawFrame(frameNewMount / 2 % mountFra.nFrame, xMount, yMount + fy, transMount, 3, g);
 			}
 			else
 			{
@@ -4045,8 +4064,8 @@ public class Char : IMapObject
 			}
 			if (idMount >= ID_NEW_MOUNT)
 			{
-				FrameImage fraImage2 = mSystem.getFraImage(strMount + (idMount - ID_NEW_MOUNT) + "_0");
-				fraImage2?.drawFrame(frameNewMount / 2 % fraImage2.nFrame, xMount, yMount + fy, transMount, 3, g);
+				FrameImage mountFra2 = GetMountFra(0);
+				mountFra2?.drawFrame(frameNewMount / 2 % mountFra2.nFrame, xMount, yMount + fy, transMount, 3, g);
 			}
 			else
 			{
@@ -4105,8 +4124,8 @@ public class Char : IMapObject
 			}
 			if (idMount >= ID_NEW_MOUNT)
 			{
-				FrameImage fraImage = mSystem.getFraImage(strMount + (idMount - ID_NEW_MOUNT) + "_1");
-				fraImage?.drawFrame(frameNewMount / 2 % fraImage.nFrame, xMount, yMount + fy, transMount, 3, g);
+				FrameImage mountFra = GetMountFra(1);
+				mountFra?.drawFrame(frameNewMount / 2 % mountFra.nFrame, xMount, yMount + fy, transMount, 3, g);
 			}
 			else if (isSpeacialMount)
 			{
@@ -4155,8 +4174,8 @@ public class Char : IMapObject
 			}
 			if (idMount >= ID_NEW_MOUNT)
 			{
-				FrameImage fraImage2 = mSystem.getFraImage(strMount + (idMount - ID_NEW_MOUNT) + "_1");
-				fraImage2?.drawFrame(frameNewMount / 2 % fraImage2.nFrame, xMount, yMount + fy, transMount, 3, g);
+				FrameImage mountFra2 = GetMountFra(1);
+				mountFra2?.drawFrame(frameNewMount / 2 % mountFra2.nFrame, xMount, yMount + fy, transMount, 3, g);
 				return;
 			}
 			if (isSpeacialMount)
@@ -4897,7 +4916,7 @@ public class Char : IMapObject
 			{
 				return;
 			}
-			if (petFollow != null)
+			if (petFollow != null && !lodSkip)
 			{
 				petFollow.paint(g);
 			}
@@ -4918,11 +4937,19 @@ public class Char : IMapObject
 					g.drawLine(cx, cy - ch / 2, mobHold.x, mobHold.y - mobHold.h / 2);
 				}
 			}
-			paintSuperEffBehind(g);
-			paintAuraBehind(g);
-			paintEffBehind(g);
-			paintEff_Lvup_behind(g);
-			paintEff_Pet(g);
+			bool flag = lodSkip;
+			bool flag2 = flag || (!me && ModExtras.HideOthersAura);
+			if (!flag2)
+			{
+				paintSuperEffBehind(g);
+				paintAuraBehind(g);
+			}
+			if (!flag)
+			{
+				paintEffBehind(g);
+				paintEff_Lvup_behind(g);
+				paintEff_Pet(g);
+			}
 			if (shadowLife > 0)
 			{
 				if (GameCanvas.gameTick % 2 == 0)
@@ -4965,10 +4992,19 @@ public class Char : IMapObject
 				paintEffect(g);
 				_ = mobMe;
 				paintMount2(g);
-				paintEff_Lvup_front(g);
-				paintSuperEffFront(g);
-				paintAuraFront(g);
-				paintEffFront(g);
+				if (!flag)
+				{
+					paintEff_Lvup_front(g);
+				}
+				if (!flag2)
+				{
+					paintSuperEffFront(g);
+					paintAuraFront(g);
+				}
+				if (!flag)
+				{
+					paintEffFront(g);
+				}
 				paint_map_line(g);
 			}
 		}
@@ -5281,6 +5317,18 @@ public class Char : IMapObject
 		}
 	}
 
+	private void DrawNameText(mGraphics g, mFont f, string text, int x, int y, int align, mFont border)
+	{
+		if (lodSkip)
+		{
+			f.drawString(g, text, x, y, align);
+		}
+		else
+		{
+			f.drawStringBorder(g, text, x, y, align, border);
+		}
+	}
+
 	private void PaintCharName_HP_MP_Overhead(mGraphics g)
 	{
 		Part part = GetPartSafe(getFHead(head));
@@ -5371,15 +5419,15 @@ public class Char : IMapObject
 		{
 			if (mSystem.clientType == 1)
 			{
-				mFont2.drawStringBorder(g, cName, cx, cy - num, mFont.CENTER, mFont.tahoma_7_greySmall);
+				DrawNameText(g, mFont2, cName, cx, cy - num, mFont.CENTER, mFont.tahoma_7_greySmall);
 			}
 			else if (charID == -83)
 			{
-				mFont2.drawStringBorder(g, cName, cx, cy - num, mFont.CENTER, mFont.tahoma_7_greySmall);
+				DrawNameText(g, mFont2, cName, cx, cy - num, mFont.CENTER, mFont.tahoma_7_greySmall);
 			}
 			else
 			{
-				mFont2.drawStringBorder(g, cName, cx, cy - num, mFont.CENTER, mFont.tahoma_7_greySmall);
+				DrawNameText(g, mFont2, cName, cx, cy - num, mFont.CENTER, mFont.tahoma_7_greySmall);
 			}
 			if (isTichXanh)
 			{
@@ -5393,7 +5441,7 @@ public class Char : IMapObject
 		}
 		if (myCharz().charFocus != null && myCharz().charFocus.Equals(this))
 		{
-			mFont2.drawStringBorder(g, cName, cx, cy - num, mFont.CENTER, mFont.tahoma_7_greySmall);
+			DrawNameText(g, mFont2, cName, cx, cy - num, mFont.CENTER, mFont.tahoma_7_greySmall);
 			if (isTichXanh)
 			{
 				ModFunc.PaintTicks(g, cx + width / 2, cy - num + 1);
@@ -5401,7 +5449,7 @@ public class Char : IMapObject
 		}
 		else if (charFocus == null)
 		{
-			mFont2.drawStringBorder(g, cName, cx - 10, cy - num + 3, mFont.LEFT, mFont.tahoma_7_grey);
+			DrawNameText(g, mFont2, cName, cx - 10, cy - num + 3, mFont.LEFT, mFont.tahoma_7_grey);
 			if (isTichXanh)
 			{
 				ModFunc.PaintTicks(g, cx + width / 2 + 4, cy - num + 4);
@@ -5656,18 +5704,15 @@ public class Char : IMapObject
 		PartImage piBody = GetPartImageSafe(pb, CharInfo[cf][2][0]);
 		if (bag >= 0 && statusMe != 14)
 		{
-			if (!ClanImage.idImages.containsKey(bag + string.Empty))
+			ClanImage clanImage = (ClanImage)ClanImage.idImages.get(GetBagKey());
+			if (clanImage == null)
 			{
-				ClanImage.idImages.put(bag + string.Empty, new ClanImage());
+				ClanImage.idImages.put(GetBagKey(), new ClanImage());
 				Service.gI().requestBagImage((sbyte)bag);
 			}
-			else
+			else if (clanImage.idImage != null && isPaintBag && !lodSkip && (me || !ModExtras.HideOthersBag))
 			{
-				ClanImage clanImage = (ClanImage)ClanImage.idImages.get(bag + string.Empty);
-				if (clanImage.idImage != null && isPaintBag)
-				{
-					paintBag(g, clanImage.idImage, cx, cy, cdir, isPaintChar: true);
-				}
+				paintBag(g, clanImage.idImage, cx, cy, cdir, isPaintChar: true);
 			}
 		}
 		int num = 2;
@@ -7136,12 +7181,44 @@ public class Char : IMapObject
 		return idHead;
 	}
 
+	private FrameImage GetAuraFra(int part)
+	{
+		if (auraKeyFor != idAuraEff)
+		{
+			auraKey0 = strEffAura + idAuraEff + "_0";
+			auraKey1 = strEffAura + idAuraEff + "_1";
+			auraKeyFor = idAuraEff;
+		}
+		return mSystem.getFraImage((part == 0) ? auraKey0 : auraKey1);
+	}
+
+	private FrameImage GetMountFra(int part)
+	{
+		if (mountKeyFor != idMount)
+		{
+			mountKey0 = strMount + (idMount - ID_NEW_MOUNT) + "_0";
+			mountKey1 = strMount + (idMount - ID_NEW_MOUNT) + "_1";
+			mountKeyFor = idMount;
+		}
+		return mSystem.getFraImage((part == 0) ? mountKey0 : mountKey1);
+	}
+
+	private string GetBagKey()
+	{
+		if (bagKeyFor != bag)
+		{
+			bagKey = bag + string.Empty;
+			bagKeyFor = bag;
+		}
+		return bagKey;
+	}
+
 	public void paintAuraBehind(mGraphics g)
 	{
 		if ((!me || !isPaintAura) && idAuraEff > -1 && (statusMe == 1 || statusMe == 6) && !GameCanvas.panel.isShow && mSystem.currentTimeMillis() - timeBlue > 0)
 		{
-			FrameImage fraImage = mSystem.getFraImage(strEffAura + idAuraEff + "_0");
-			fraImage?.drawFrame(GameCanvas.gameTick / 4 % fraImage.nFrame, cx, cy, (cdir != 1) ? 2 : 0, mGraphics.BOTTOM | mGraphics.HCENTER, g);
+			FrameImage auraFra = GetAuraFra(0);
+			auraFra?.drawFrame(GameCanvas.gameTick / 4 % auraFra.nFrame, cx, cy, (cdir != 1) ? 2 : 0, mGraphics.BOTTOM | mGraphics.HCENTER, g);
 		}
 	}
 
@@ -7174,8 +7251,8 @@ public class Char : IMapObject
 				}
 				if (mSystem.currentTimeMillis() - timeBlue > 0)
 				{
-					FrameImage fraImage = mSystem.getFraImage(strEffAura + idAuraEff + "_1");
-					fraImage?.drawFrame(GameCanvas.gameTick / 4 % fraImage.nFrame, cx, cy + 2, (cdir != 1) ? 2 : 0, mGraphics.BOTTOM | mGraphics.HCENTER, g);
+					FrameImage auraFra = GetAuraFra(1);
+					auraFra?.drawFrame(GameCanvas.gameTick / 4 % auraFra.nFrame, cx, cy + 2, (cdir != 1) ? 2 : 0, mGraphics.BOTTOM | mGraphics.HCENTER, g);
 				}
 			}
 		}

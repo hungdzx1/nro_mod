@@ -4,6 +4,8 @@ public class MainImage
 {
 	public Image img;
 
+	public FrameImage cachedFrame;
+
 	public long count = -1L;
 
 	public int timeImageNull;

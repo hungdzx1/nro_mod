@@ -7,6 +7,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Game1;
 using Game2.Mod;
 using Game2.Mod.XMAP;
 using UnityEngine;
@@ -188,6 +189,8 @@ public class ModFunc : IActionListener
 	public bool isUpdateZones;
 
 	private long lastUpdateZones;
+
+	private long lastZoneSend;
 
 	public MyVector charsInMap = new MyVector();
 
@@ -439,7 +442,7 @@ public class ModFunc : IActionListener
 		},
 		{
 			"QuickItem",
-			new Point(20, 21)
+			new Point(20, -31)
 		}
 	};
 
@@ -481,6 +484,25 @@ public class ModFunc : IActionListener
 
 	private static int SoAnh;
 
+	public static bool modMenuOpen;
+
+	public static int quickItemKey;
+
+	private static int pendingHotkeyAction;
+
+	private static readonly int[] reservedKeys = new int[22]
+	{
+		97, 98, 99, 100, 101, 102, 103, 104, 106, 107,
+		108, 109, 110, 113, 114, 115, 116, 117, 119, 120,
+		121, 122
+	};
+
+	private string settingsSnapshot = string.Empty;
+
+	private static bool settingsDirty;
+
+	private static long settingsDirtyAt;
+
 	public static void InitButtonPositions()
 	{
 		if (buttonPositions.Count != 0)
@@ -498,6 +520,12 @@ public class ModFunc : IActionListener
 		return Instance ?? new ModFunc();
 	}
 
+	public static void StartModMenu(MyVector items, int pos)
+	{
+		modMenuOpen = true;
+		GameCanvas.menu.startAt(items, pos);
+	}
+
 	public void OpenMenu()
 	{
 		MyVector myVector = new MyVector();
@@ -510,7 +538,7 @@ public class ModFunc : IActionListener
 		myVector.addElement(new Command("Auto Mua\nNhiều", 884));
 		myVector.addElement(new Command("Auto Gộp", 885));
 		myVector.addElement(new Command("Khác", 53));
-		GameCanvas.menu.startAt(myVector, 4);
+		StartModMenu(myVector, 4);
 	}
 
 	public static Color GetColor()
@@ -521,6 +549,15 @@ public class ModFunc : IActionListener
 
 	public bool UpdateKey(int key)
 	{
+		if (InputRecorder.HandleKey(key))
+		{
+			return true;
+		}
+		if (quickItemKey > 0 && key == quickItemKey)
+		{
+			UseQuickItem();
+			return true;
+		}
 		switch (key)
 		{
 		case 97:
@@ -624,7 +661,8 @@ public class ModFunc : IActionListener
 
 	public void LoadGame()
 	{
-		Time.timeScale = 2f;
+		int num = Rms.loadRMSInt("gameSpeed");
+		Time.timeScale = ((num > 0) ? ((float)num) : 1f);
 		isfpscao = 60;
 		listSkillsAuto.Clear();
 		listItemAuto.Clear();
@@ -649,19 +687,21 @@ public class ModFunc : IActionListener
 				_ = isLogoGif;
 			}
 		}
+		LoadSettings();
 		ChangeFPSTarget();
 		if (autoWakeUp)
 		{
 			GameScr.info1.addInfo("Tự động hồi sinh [Bật]", 0);
 		}
 		LoadButtonPositions();
-		int num = Rms.loadRMSInt("quickItemId");
-		if (num > 0)
+		LoadHotkeys();
+		int num2 = Rms.loadRMSInt("quickItemId");
+		if (num2 > 0)
 		{
-			quickItemId = num;
+			quickItemId = num2;
 			return;
 		}
-		switch (num)
+		switch (num2)
 		{
 		case 0:
 			quickItemId = -1;
@@ -886,6 +926,496 @@ public class ModFunc : IActionListener
 		GameScr.info1.addInfo("Đã hủy phím tắt vật phẩm", 0);
 	}
 
+	private void PerformExtra(int idAction, object p)
+	{
+		switch (idAction)
+		{
+		case 505:
+		{
+			MyVector myVector3 = new MyVector();
+			myVector3.addElement(new Command("Nhập ID mới", this, 506, null));
+			myVector3.addElement(new Command("Phím dùng vật phẩm\n[" + InputRecorder.KeyName(quickItemKey) + "]", this, 508, null));
+			myVector3.addElement(new Command("Phím ghi macro\n[" + InputRecorder.KeyName(InputRecorder.RecKey) + "]", this, 509, null));
+			myVector3.addElement(new Command("Phím phát lại\n[" + InputRecorder.KeyName(InputRecorder.ReplayKey) + "]", this, 510, null));
+			if (quickItemId > 0)
+			{
+				myVector3.addElement(new Command("Hủy phím tắt", this, 507, null));
+			}
+			StartModMenu(myVector3, 4);
+			break;
+		}
+		case 506:
+			MyChatTextField(ChatTextField.gI(), "Cài ID phím tắt", "Nhập ID (0 để hủy)");
+			break;
+		case 507:
+			ClearQuickItem();
+			break;
+		case 508:
+		case 509:
+		case 510:
+			AskHotkey(idAction);
+			break;
+		case 511:
+			InputRecorder.ToggleRecord();
+			break;
+		case 512:
+			InputRecorder.ToggleReplay();
+			break;
+		case 513:
+		{
+			MyVector myVector2 = new MyVector();
+			List<string> list = InputRecorder.ListNames();
+			for (int i = 0; i < list.Count && i < 9; i++)
+			{
+				myVector2.addElement(new Command(((list[i] == InputRecorder.CurrentName) ? "> " : string.Empty) + list[i], this, 514, list[i]));
+			}
+			myVector2.addElement(new Command("Tạo bản ghi\nmới", this, 515, null));
+			myVector2.addElement(new Command("Xóa bản ghi\n[" + InputRecorder.CurrentName + "]", this, 516, null));
+			StartModMenu(myVector2, 4);
+			break;
+		}
+		case 514:
+			InputRecorder.SetName((string)p);
+			break;
+		case 515:
+			MyChatTextField(ChatTextField.gI(), "Tên bản ghi", "Nhập tên (a-z, 0-9)");
+			ChatTextField.gI().tfChat.setIputType(TField.INPUT_TYPE_ANY);
+			ChatTextField.gI().tfChat.setMaxTextLenght(20);
+			break;
+		case 516:
+			InputRecorder.DeleteCurrent();
+			break;
+		case 517:
+			ModExtras.TogglePowerSave();
+			break;
+		case 518:
+			ModExtras.ToggleStatus();
+			break;
+		case 522:
+		{
+			MyVector myVector = new MyVector();
+			myVector.addElement(new Command("Sao chép mã\nbản ghi", this, 523, null));
+			myVector.addElement(new Command("Dán mã\nbản ghi", this, 524, null));
+			StartModMenu(myVector, 4);
+			break;
+		}
+		case 523:
+			InputRecorder.ExportToClipboard();
+			break;
+		case 524:
+			InputRecorder.ImportFromClipboard();
+			break;
+		case 525:
+			ModExtras.ToggleReturn();
+			break;
+		case 526:
+			ModExtras.ToggleLod();
+			break;
+		case 527:
+			ModExtras.ToggleSyncTabs();
+			break;
+		case 519:
+		case 520:
+		case 521:
+			break;
+		}
+	}
+
+	public void AskHotkey(int action)
+	{
+		pendingHotkeyAction = action;
+		MyChatTextField(ChatTextField.gI(), "Cài phím tắt", "Nhập 1 phím (0 để hủy)");
+		ChatTextField.gI().tfChat.setIputType(TField.INPUT_TYPE_ANY);
+		ChatTextField.gI().tfChat.setMaxTextLenght(1);
+	}
+
+	public void SetHotkey(string text)
+	{
+		text = (text ?? string.Empty).Trim().ToLower();
+		if (text.Length != 1)
+		{
+			GameScr.info1.addInfo("Chỉ nhập 1 phím", 0);
+			return;
+		}
+		int num = 0;
+		if (text != "0")
+		{
+			num = text[0];
+			if (num < 33 || num > 126 || (num >= 48 && num <= 57) || Array.IndexOf(reservedKeys, num) >= 0)
+			{
+				GameScr.info1.addInfo("Phím '" + text.ToUpper() + "' đã dùng cho chức năng khác, chọn phím khác", 0);
+				return;
+			}
+			if ((pendingHotkeyAction != 508 && num == quickItemKey) || (pendingHotkeyAction != 509 && num == InputRecorder.RecKey) || (pendingHotkeyAction != 510 && num == InputRecorder.ReplayKey))
+			{
+				GameScr.info1.addInfo("Phím '" + text.ToUpper() + "' đã được gán, chọn phím khác", 0);
+				return;
+			}
+		}
+		switch (pendingHotkeyAction)
+		{
+		case 508:
+			quickItemKey = num;
+			Rms.saveRMSInt("hotkeyQuick", num);
+			break;
+		case 509:
+			InputRecorder.SetRecKey(num);
+			break;
+		case 510:
+			InputRecorder.SetReplayKey(num);
+			break;
+		}
+		GameScr.info1.addInfo((num == 0) ? "Đã hủy phím tắt" : ("Đã gán phím " + text.ToUpper()), 0);
+	}
+
+	public static void MarkSettingsDirty()
+	{
+		settingsDirty = true;
+		settingsDirtyAt = mSystem.currentTimeMillis();
+	}
+
+	private static void Kv(StringBuilder sb, string key, bool v)
+	{
+		sb.Append(key).Append('=').Append(v ? '1' : '0')
+			.Append(';');
+	}
+
+	private static void Kv(StringBuilder sb, string key, int v)
+	{
+		sb.Append(key).Append('=').Append(v)
+			.Append(';');
+	}
+
+	private static void KvList<T>(StringBuilder sb, string key, List<T> list)
+	{
+		sb.Append(key).Append('=').Append(string.Join(",", list.Select((T x) => x.ToString()).ToArray()))
+			.Append(';');
+	}
+
+	private static string CleanFilterName(string name)
+	{
+		return (name ?? string.Empty).Replace(';', ' ').Replace('=', ' ').Replace('|', ' ')
+			.Replace('~', ' ');
+	}
+
+	private string BuildSettings()
+	{
+		StringBuilder stringBuilder = new StringBuilder("v1;");
+		Kv(stringBuilder, "hf", isHighFps);
+		Kv(stringBuilder, "uz", isUpdateZones);
+		Kv(stringBuilder, "sc", showCharsInMap);
+		Kv(stringBuilder, "si", showInfoMe);
+		Kv(stringBuilder, "sb", isShowButton);
+		Kv(stringBuilder, "aw", autoWakeUp);
+		Kv(stringBuilder, "vn", isVietnamese);
+		Kv(stringBuilder, "nb", notifBoss);
+		Kv(stringBuilder, "nk", notifKillBoss);
+		Kv(stringBuilder, "lb", lineToBoss);
+		Kv(stringBuilder, "fb", focusBoss);
+		Kv(stringBuilder, "pp", isPeanPet);
+		Kv(stringBuilder, "xs", ModExtras.ShowStatus);
+		Kv(stringBuilder, "xr", ModExtras.ReturnToMap);
+		Kv(stringBuilder, "xl", ModExtras.AutoLod);
+		Kv(stringBuilder, "xa", ModExtras.HideOthersAura);
+		Kv(stringBuilder, "xb", ModExtras.HideOthersBag);
+		Kv(stringBuilder, "ff", isFilterItem);
+		Kv(stringBuilder, "af", isAutoFilterItem);
+		Kv(stringBuilder, "pa", PickMob.IsAutoPickItems);
+		Kv(stringBuilder, "pl", PickMob.IsPickItemsAll);
+		Kv(stringBuilder, "pd", PickMob.IsPickItemsDis);
+		Kv(stringBuilder, "pt", PickMob.IsLimitTimesPickItem);
+		Kv(stringBuilder, "pm", PickMob.TimesAutoPickItemMax);
+		Kv(stringBuilder, "vd", PickMob.vuotDiaHinh);
+		Kv(stringBuilder, "tp", PickMob.telePem);
+		Kv(stringBuilder, "ns", PickMob.neSieuQuai);
+		Kv(stringBuilder, "ts", PickMob.tsPlayer);
+		Kv(stringBuilder, "hp", PickMob.HpBuff);
+		Kv(stringBuilder, "mp", PickMob.MpBuff);
+		KvList(stringBuilder, "tm", PickMob.TypeMobsTanSat);
+		KvList(stringBuilder, "ip", PickMob.IdItemPicks);
+		KvList(stringBuilder, "ib", PickMob.IdItemBlocks);
+		KvList(stringBuilder, "ti", PickMob.TypeItemPicks);
+		KvList(stringBuilder, "tb", PickMob.TypeItemBlock);
+		stringBuilder.Append("fl=");
+		for (int i = 0; i < listFilterItems.Count; i++)
+		{
+			if (i > 0)
+			{
+				stringBuilder.Append('|');
+			}
+			ItemAutoFilter itemAutoFilter = listFilterItems[i];
+			stringBuilder.Append(itemAutoFilter.iconID).Append('~').Append(itemAutoFilter.id)
+				.Append('~')
+				.Append(CleanFilterName(itemAutoFilter.name));
+		}
+		stringBuilder.Append(';');
+		return stringBuilder.ToString();
+	}
+
+	private static List<int> ParseInts(string text)
+	{
+		List<int> list = new List<int>();
+		if (!string.IsNullOrEmpty(text))
+		{
+			string[] array = text.Split(',');
+			for (int i = 0; i < array.Length; i++)
+			{
+				if (int.TryParse(array[i], out var result))
+				{
+					list.Add(result);
+				}
+			}
+		}
+		return list;
+	}
+
+	public void LoadSettings()
+	{
+		string text = Rms.loadRMSString("modSettings");
+		if (string.IsNullOrEmpty(text) || !text.StartsWith("v1;"))
+		{
+			settingsSnapshot = BuildSettings();
+		}
+		else
+		{
+			ApplySettingsText(text);
+		}
+	}
+
+	public void ApplySettingsText(string text)
+	{
+		Dictionary<string, string> dictionary = new Dictionary<string, string>();
+		string[] array = text.Split(';');
+		for (int i = 0; i < array.Length; i++)
+		{
+			int num = array[i].IndexOf('=');
+			if (num > 0)
+			{
+				dictionary[array[i].Substring(0, num)] = array[i].Substring(num + 1);
+			}
+		}
+		if (dictionary.TryGetValue("hf", out var value))
+		{
+			isHighFps = value == "1";
+		}
+		if (dictionary.TryGetValue("uz", out value))
+		{
+			isUpdateZones = value == "1";
+		}
+		if (dictionary.TryGetValue("sc", out value))
+		{
+			showCharsInMap = value == "1";
+		}
+		if (dictionary.TryGetValue("si", out value))
+		{
+			showInfoMe = value == "1";
+		}
+		if (dictionary.TryGetValue("sb", out value))
+		{
+			isShowButton = value == "1";
+		}
+		if (dictionary.TryGetValue("aw", out value))
+		{
+			autoWakeUp = value == "1";
+		}
+		if (dictionary.TryGetValue("vn", out value))
+		{
+			isVietnamese = value == "1";
+		}
+		if (dictionary.TryGetValue("nb", out value))
+		{
+			notifBoss = value == "1";
+		}
+		if (dictionary.TryGetValue("nk", out value))
+		{
+			notifKillBoss = value == "1";
+		}
+		if (dictionary.TryGetValue("lb", out value))
+		{
+			lineToBoss = value == "1";
+		}
+		if (dictionary.TryGetValue("fb", out value))
+		{
+			focusBoss = value == "1";
+		}
+		if (dictionary.TryGetValue("pp", out value))
+		{
+			isPeanPet = value == "1";
+		}
+		if (dictionary.TryGetValue("xs", out value))
+		{
+			ModExtras.ShowStatus = value == "1";
+		}
+		if (dictionary.TryGetValue("xr", out value))
+		{
+			ModExtras.ReturnToMap = value == "1";
+		}
+		if (dictionary.TryGetValue("xl", out value))
+		{
+			ModExtras.AutoLod = value == "1";
+		}
+		if (dictionary.TryGetValue("xa", out value))
+		{
+			ModExtras.HideOthersAura = value == "1";
+		}
+		if (dictionary.TryGetValue("xb", out value))
+		{
+			ModExtras.HideOthersBag = value == "1";
+		}
+		if (dictionary.TryGetValue("ff", out value))
+		{
+			isFilterItem = value == "1";
+		}
+		if (dictionary.TryGetValue("af", out value))
+		{
+			isAutoFilterItem = value == "1";
+		}
+		if (dictionary.TryGetValue("pa", out value))
+		{
+			PickMob.IsAutoPickItems = value == "1";
+		}
+		if (dictionary.TryGetValue("pl", out value))
+		{
+			PickMob.IsPickItemsAll = value == "1";
+		}
+		if (dictionary.TryGetValue("pd", out value))
+		{
+			PickMob.IsPickItemsDis = value == "1";
+		}
+		if (dictionary.TryGetValue("pt", out value))
+		{
+			PickMob.IsLimitTimesPickItem = value == "1";
+		}
+		if (dictionary.TryGetValue("pm", out value) && int.TryParse(value, out var result))
+		{
+			PickMob.TimesAutoPickItemMax = result;
+		}
+		if (dictionary.TryGetValue("vd", out value))
+		{
+			PickMob.vuotDiaHinh = value == "1";
+		}
+		if (dictionary.TryGetValue("tp", out value))
+		{
+			PickMob.telePem = value == "1";
+		}
+		if (dictionary.TryGetValue("ns", out value))
+		{
+			PickMob.neSieuQuai = value == "1";
+		}
+		if (dictionary.TryGetValue("ts", out value))
+		{
+			PickMob.tsPlayer = value == "1";
+		}
+		if (dictionary.TryGetValue("hp", out value) && int.TryParse(value, out result))
+		{
+			PickMob.HpBuff = result;
+		}
+		if (dictionary.TryGetValue("mp", out value) && int.TryParse(value, out result))
+		{
+			PickMob.MpBuff = result;
+		}
+		if (dictionary.TryGetValue("tm", out value))
+		{
+			PickMob.TypeMobsTanSat = ParseInts(value);
+		}
+		if (dictionary.TryGetValue("ip", out value))
+		{
+			PickMob.IdItemPicks = (from x in ParseInts(value)
+				select (short)x).ToList();
+		}
+		if (dictionary.TryGetValue("ib", out value))
+		{
+			PickMob.IdItemBlocks = (from x in ParseInts(value)
+				select (short)x).ToList();
+		}
+		if (dictionary.TryGetValue("ti", out value))
+		{
+			PickMob.TypeItemPicks = (from x in ParseInts(value)
+				select (sbyte)x).ToList();
+		}
+		if (dictionary.TryGetValue("tb", out value))
+		{
+			PickMob.TypeItemBlock = (from x in ParseInts(value)
+				select (sbyte)x).ToList();
+		}
+		if (dictionary.TryGetValue("fl", out value))
+		{
+			listFilterItems.Clear();
+			if (!string.IsNullOrEmpty(value))
+			{
+				string[] array2 = value.Split('|');
+				for (int j = 0; j < array2.Length; j++)
+				{
+					string[] array3 = array2[j].Split('~');
+					if (array3.Length >= 3 && int.TryParse(array3[0], out var result2) && int.TryParse(array3[1], out var result3))
+					{
+						listFilterItems.Add(new ItemAutoFilter(result2, result3, array3[2]));
+					}
+				}
+			}
+		}
+		settingsSnapshot = BuildSettings();
+	}
+
+	public void SaveSettingsIfChanged()
+	{
+		try
+		{
+			string text = BuildSettings();
+			if (text == settingsSnapshot)
+			{
+				return;
+			}
+			if (Encoding.UTF8.GetByteCount(text) > 60000)
+			{
+				Debug.Log("ModFunc.SaveSettings: cài đặt quá lớn, bỏ qua");
+				return;
+			}
+			settingsSnapshot = text;
+			Rms.saveRMSString("modSettings", text);
+			if (ModExtras.SyncTabs)
+			{
+				Game1.ModFunc.GI().ApplySettingsFromOtherTab(text);
+			}
+		}
+		catch (Exception ex)
+		{
+			Debug.Log("ModFunc.SaveSettings: " + ex.Message);
+		}
+	}
+
+	public void ApplySettingsFromOtherTab(string text)
+	{
+		try
+		{
+			ApplySettingsText(text);
+			ChangeFPSTarget();
+			Rms.saveRMSString("modSettings", text);
+		}
+		catch (Exception ex)
+		{
+			Debug.Log("ModFunc.ApplySettingsFromOtherTab: " + ex.Message);
+		}
+	}
+
+	public void PushSettingsToOtherTab()
+	{
+		Game1.ModFunc.GI().ApplySettingsFromOtherTab(BuildSettings());
+	}
+
+	public static void SaveSettingsNow()
+	{
+		Instance.SaveSettingsIfChanged();
+		PlayerPrefs.Save();
+	}
+
+	public void LoadHotkeys()
+	{
+		quickItemKey = System.Math.Max(0, Rms.loadRMSInt("hotkeyQuick"));
+		InputRecorder.LoadHotkeys();
+		ModExtras.Load();
+	}
+
 	public string GetQuickItemName()
 	{
 		if (quickItemId <= 0)
@@ -1104,6 +1634,11 @@ public class ModFunc : IActionListener
 
 	public bool Chat(string text)
 	{
+		MarkSettingsDirty();
+		if (InputRecorder.HandleChat(text) || ModExtras.HandleChat(text))
+		{
+			return true;
+		}
 		if (AutoGop.gI().HandleChatCommand(text))
 		{
 			return true;
@@ -1252,21 +1787,29 @@ public class ModFunc : IActionListener
 				int num2 = modKeyPosY + buttonPosition.Value.y;
 				if (GameCanvas.isPointerHoldIn(num - 16, num2 - 16, 32, 32) && GameCanvas.isPointerClick && GameCanvas.isPointerJustRelease)
 				{
-					switch (buttonPosition.Key)
+					string key = buttonPosition.Key;
+					bool flag = false;
+					switch (key)
 					{
 					case "Zone":
 						userOpenZones = true;
 						Service.gI().openUIZone();
+						flag = true;
 						break;
 					case "Fusion":
 						UsePorata();
+						flag = true;
 						break;
 					case "QuickItem":
 						UseQuickItem();
+						flag = true;
 						break;
 					}
-					GameCanvas.clearAllPointerEvent();
-					break;
+					if (flag)
+					{
+						GameCanvas.clearAllPointerEvent();
+						break;
+					}
 				}
 			}
 			return;
@@ -1333,6 +1876,7 @@ public class ModFunc : IActionListener
 	public void Update()
 	{
 		UpdateTouch();
+		ModExtras.Update();
 		AutoItem.Update();
 		AutoMuaNhieu.gI().Update();
 		AutoGop.gI().Update();
@@ -1377,8 +1921,9 @@ public class ModFunc : IActionListener
 		if (!TileMap.isOfflineMap() && mSystem.currentTimeMillis() - lastUpdateZones >= 1000)
 		{
 			UseItemAuto();
-			if (isUpdateZones)
+			if (isUpdateZones && !ModExtras.PowerSave && mSystem.currentTimeMillis() - lastZoneSend >= 3000)
 			{
+				lastZoneSend = mSystem.currentTimeMillis();
 				Service.gI().openUIZone();
 			}
 			lastUpdateZones = mSystem.currentTimeMillis();
@@ -1403,6 +1948,11 @@ public class ModFunc : IActionListener
 			AutoAttack();
 		}
 		UpdateNotifTichXanh();
+		if (settingsDirty && num - settingsDirtyAt >= 500)
+		{
+			settingsDirty = false;
+			SaveSettingsIfChanged();
+		}
 		if (isAutoNoitai && Input.GetKey("q"))
 		{
 			isAutoNoitai = false;
@@ -1622,6 +2172,7 @@ public class ModFunc : IActionListener
 			}
 		}
 		g.drawImage(GameScr.imgModFunc, GameScr.imgPanel.getWidth() + 20, 15, 3);
+		ModExtras.PaintHud(g);
 		PaintPlayerTichXanh(g);
 		if (isEditButton)
 		{
@@ -1847,6 +2398,7 @@ public class ModFunc : IActionListener
 
 	public void perform(int idAction, object p)
 	{
+		MarkSettingsDirty();
 		if (idAction > 60)
 		{
 			if (idAction <= 104)
@@ -1870,7 +2422,7 @@ public class ModFunc : IActionListener
 					myVector.addElement(new Command("Xem DS lọc đồ", 93));
 					myVector.addElement(new Command("Tự động lọc đồ", 94));
 					myVector.addElement(new Command("Delay lọc: " + filterDropSettings.delayMs + "ms", 96));
-					GameCanvas.menu.startAt(myVector, 4);
+					StartModMenu(myVector, 4);
 					break;
 				}
 				case 90:
@@ -1948,17 +2500,45 @@ public class ModFunc : IActionListener
 			}
 			else if (idAction - 502 > 1)
 			{
-				if (idAction == 883)
+				switch (idAction)
 				{
+				case 883:
 					XmapController.ShowXmapMenu();
-				}
-				else if (idAction == 884)
-				{
+					break;
+				case 884:
 					AutoMuaNhieu.gI().ToggleWindow();
-				}
-				else if (idAction == 885)
-				{
+					break;
+				case 885:
 					AutoGop.gI().ToggleWindow();
+					break;
+				case 505:
+				case 506:
+				case 507:
+				case 508:
+				case 509:
+				case 510:
+				case 511:
+				case 512:
+				case 513:
+				case 514:
+				case 515:
+				case 516:
+				case 517:
+				case 518:
+				case 519:
+				case 520:
+				case 521:
+				case 522:
+				case 523:
+				case 524:
+				case 525:
+				case 526:
+				case 527:
+				case 528:
+				case 529:
+				case 530:
+					PerformExtra(idAction, p);
+					break;
 				}
 			}
 			else
@@ -1991,7 +2571,7 @@ public class ModFunc : IActionListener
 		{
 			MyVector myVector3 = new MyVector();
 			myVector3.addElement(new Command(isPeanPet ? "Buff đậu cho đệ [Bật]" : "Buff đậu cho đệ [Tắt]", 17));
-			GameCanvas.menu.startAt(myVector3, 4);
+			StartModMenu(myVector3, 4);
 			break;
 		}
 		case 32:
@@ -2001,7 +2581,7 @@ public class ModFunc : IActionListener
 			myVector4.addElement(new Command(notifKillBoss ? "Thông báo tiêu diệt BOSS [Bật]" : "Thông báo tiêu diệt BOSS [Tắt]", 55));
 			myVector4.addElement(new Command(lineToBoss ? "Kẻ đường tới BOSS [Bật]" : "Đường kẻ tới BOSS [Tắt]", 47));
 			myVector4.addElement(new Command(focusBoss ? "Focus BOSS [Bật]" : "Focus BOSS [Tắt]", 52));
-			GameCanvas.menu.startAt(myVector4, 4);
+			StartModMenu(myVector4, 4);
 			break;
 		}
 		case 38:
@@ -2056,7 +2636,7 @@ public class ModFunc : IActionListener
 			myVector5.addElement(new Command(PickMob.telePem ? "Dịch chuyển\n[Bật]" : "Dịch chuyển\n[Tắt]", 80));
 			myVector5.addElement(new Command(PickMob.isGoBack ? "Goback Tọa Độ [Bật]" : "Goback Tọa Độ [Tắt]", 38));
 			myVector5.addElement(new Command("Xoá danh sách tàn sát", 51));
-			GameCanvas.menu.startAt(myVector5, 4);
+			StartModMenu(myVector5, 4);
 			break;
 		}
 		case 46:
@@ -2093,12 +2673,21 @@ public class ModFunc : IActionListener
 			break;
 		case 53:
 		{
-			MyVector myVector7 = new MyVector();
-			myVector7.addElement(new Command("FPS\nGame\n[" + Application.targetFrameRate + "]", 60));
-			myVector7.addElement(new Command("Tốc độ\nGame\n[" + Time.timeScale + "]", 54));
-			myVector7.addElement(new Command("Giảm\nĐồ Hoạ", 58));
-			myVector7.addElement(new Command("Load ô\nskill", 57));
-			GameCanvas.menu.startAt(myVector7, 4);
+			MyVector myVector2 = new MyVector();
+			myVector2.addElement(new Command("FPS\nGame\n[" + Application.targetFrameRate + "]", 60));
+			myVector2.addElement(new Command("Tốc độ\nGame\n[" + Time.timeScale + "]", 54));
+			myVector2.addElement(new Command("Giảm\nĐồ Hoạ", 58));
+			myVector2.addElement(new Command("Load ô\nskill", 57));
+			myVector2.addElement(new Command("Ghi\nMacro\n" + (InputRecorder.IsRecording ? "[Bật]" : "[Tắt]"), this, 511, null));
+			myVector2.addElement(new Command("Phát lại\nMacro\n" + (InputRecorder.IsPlaying ? "[Bật]" : "[Tắt]"), this, 512, null));
+			myVector2.addElement(new Command("Bản ghi\nMacro\n[" + InputRecorder.CurrentName + "]", this, 513, null));
+			myVector2.addElement(new Command("Tiết kiệm\nKhi treo\n" + (ModExtras.PowerSave ? "[Bật]" : "[Tắt]"), this, 517, null));
+			myVector2.addElement(new Command("Trạng thái\nMod\n" + (ModExtras.ShowStatus ? "[Bật]" : "[Tắt]"), this, 518, null));
+			myVector2.addElement(new Command("Chia sẻ\nMacro", this, 522, null));
+			myVector2.addElement(new Command("Về map cũ\nSau ĐN\n" + (ModExtras.ReturnToMap ? "[Bật]" : "[Tắt]"), this, 525, null));
+			myVector2.addElement(new Command("Giảm hiệu ứng\nKhi đông\n" + (ModExtras.AutoLod ? "[Bật]" : "[Tắt]"), this, 526, null));
+			myVector2.addElement(new Command("Đồng bộ\n2 tab\n" + (ModExtras.SyncTabs ? "[Bật]" : "[Tắt]"), this, 527, null));
+			StartModMenu(myVector2, 4);
 			break;
 		}
 		case 54:
@@ -2123,23 +2712,6 @@ public class ModFunc : IActionListener
 		case 17:
 			isPeanPet = !isPeanPet;
 			GameScr.info1.addInfo("Buff đậu cho đệ " + (isPeanPet ? "[Bật]" : "[Tắt]"), 0);
-			break;
-		case 505:
-		{
-			MyVector myVector2 = new MyVector();
-			myVector2.addElement(new Command("Nhập ID mới", this, 506, null));
-			if (quickItemId > 0)
-			{
-				myVector2.addElement(new Command("Hủy phím tắt", this, 507, null));
-			}
-			GameCanvas.menu.startAt(myVector2, 4);
-			break;
-		}
-		case 506:
-			MyChatTextField(ChatTextField.gI(), "Cài ID phím tắt", "Nhập ID (0 để hủy)");
-			break;
-		case 507:
-			ClearQuickItem();
 			break;
 		}
 	}
@@ -2221,6 +2793,7 @@ public class ModFunc : IActionListener
 		if (int.TryParse(strSpeed, out var result) && result > 0 && result <= 100)
 		{
 			Time.timeScale = result;
+			Rms.saveRMSInt("gameSpeed", result);
 			GameScr.info1.addInfo("Tốc độ game: " + result, 0);
 		}
 		else
@@ -2565,7 +3138,7 @@ public class ModFunc : IActionListener
 		MyVector myVector = new MyVector();
 		myVector.addElement(new Command("Đi tới\nMAP " + mapId, this, 1, mapId.ToString()));
 		myVector.addElement(new Command("Huỷ", this, 2, null));
-		GameCanvas.menu.startAt(myVector, 4);
+		StartModMenu(myVector, 4);
 	}
 
 	public void ChangeFPSTarget()
@@ -2857,15 +3430,30 @@ public class ModFunc : IActionListener
 
 	public static bool AutoLogin()
 	{
-		if (autoLogin == null || autoLogin.waitToNextLogin)
+		if (autoLogin == null)
 		{
-			return false;
+			if (!isAutoLogin)
+			{
+				return false;
+			}
+			autoLogin = new AutoLogin
+			{
+				accAutoLogin = (Rms.loadRMSString("acc") ?? string.Empty)
+			};
+		}
+		if (autoLogin.waitToNextLogin)
+		{
+			if (!Util.CanDoWithTime(autoLogin.lastTimeLogin, 15000L))
+			{
+				return false;
+			}
+			autoLogin.waitToNextLogin = false;
 		}
 		if (!Util.CanDoWithTime(autoLogin.lastTimeWait, 500L))
 		{
 			return false;
 		}
-		if (ServerListScreen.ipSelect < 0 || ServerListScreen.ipSelect >= ServerListScreen.address.Length || string.IsNullOrEmpty(ServerListScreen.address[ServerListScreen.ipSelect]) || ServerListScreen.testConnect != 2)
+		if (ServerListScreen.address == null || ServerListScreen.ipSelect < 0 || ServerListScreen.ipSelect >= ServerListScreen.address.Length || string.IsNullOrEmpty(ServerListScreen.address[ServerListScreen.ipSelect]) || ServerListScreen.testConnect != 2)
 		{
 			ServerListScreen.LoadIP();
 			if (GameCanvas.serverScreen == null)
@@ -2888,18 +3476,44 @@ public class ModFunc : IActionListener
 		}
 		if (!autoLogin.hasSetUserPass)
 		{
-			Account accWithUsername = autoLogin.GetAccWithUsername(accounts);
-			if (accWithUsername.getUsername().Length > 0)
+			Account account = autoLogin.GetAccWithUsername(accounts);
+			if (account.getUsername().Length == 0 && string.IsNullOrEmpty(autoLogin.accAutoLogin) && accounts.Count > 0)
 			{
-				Rms.saveRMSString("acc", accWithUsername.getUsername());
-				Rms.saveRMSString("pass", accWithUsername.getPassword());
+				account = accounts[0];
+			}
+			if (account.getUsername().Length > 0)
+			{
+				Rms.saveRMSString("acc", account.getUsername());
+				Rms.saveRMSString("pass", account.getPassword());
 				GameCanvas.loginScr.setUserPass();
 				autoLogin.hasSetUserPass = true;
 			}
 			autoLogin.lastTimeWait = mSystem.currentTimeMillis();
 		}
+		string value = Rms.loadRMSString("acc");
+		string value2 = Rms.loadRMSString("pass");
+		if (string.IsNullOrEmpty(value) || string.IsNullOrEmpty(value2))
+		{
+			if (!autoLogin.warnedNoAccount)
+			{
+				autoLogin.warnedNoAccount = true;
+				GameScr.info1.addInfo("Tự đăng nhập: chưa có tài khoản đã lưu (đăng nhập tay 1 lần và bấm OK)", 0);
+			}
+			autoLogin.lastTimeWait = mSystem.currentTimeMillis();
+			return false;
+		}
+		if (autoLogin.attempts >= 5)
+		{
+			isAutoLogin = false;
+			autoLogin = null;
+			GameScr.info1.addInfo("Tự đăng nhập đã tắt: thử 5 lần không thành công", 0);
+			return false;
+		}
+		autoLogin.attempts++;
+		autoLogin.lastTimeLogin = mSystem.currentTimeMillis();
 		GameCanvas.loginScr.doLogin();
 		autoLogin.waitToNextLogin = true;
+		ModExtras.OnAutoLoginSent();
 		return true;
 	}
 
@@ -2927,13 +3541,19 @@ public class ModFunc : IActionListener
 					continue;
 				}
 				string[] array2 = text2.Split(',');
-				if (array2.Length == 3)
+				if (array2.Length != 3)
 				{
-					string key = array2[0];
-					if (int.TryParse(array2[1], out var result) && int.TryParse(array2[2], out var result2))
+					continue;
+				}
+				string text3 = array2[0];
+				if (int.TryParse(array2[1], out var result) && int.TryParse(array2[2], out var result2))
+				{
+					if (text3 == "QuickItem" && result == 20 && result2 == 21)
 					{
-						buttonPositions[key] = new Point(result, result2);
+						result = defaultButtonPositions["QuickItem"].x;
+						result2 = defaultButtonPositions["QuickItem"].y;
 					}
+					buttonPositions[text3] = new Point(result, result2);
 				}
 			}
 			{
@@ -2972,6 +3592,7 @@ public class ModFunc : IActionListener
 		if (isAdd)
 		{
 			listFilterItems.Add(new ItemAutoFilter(item.template.iconID, item.template.id, item.template.name));
+			MarkSettingsDirty();
 			GameScr.info1.addInfo("Đã thêm " + item.template.name + " vào DS lọc đồ", 0);
 			return;
 		}
@@ -2980,6 +3601,7 @@ public class ModFunc : IActionListener
 			if (listFilterItem.iconID == item.template.iconID && listFilterItem.id == item.template.id && listFilterItem.name == item.template.name)
 			{
 				listFilterItems.Remove(listFilterItem);
+				MarkSettingsDirty();
 				GameScr.info1.addInfo("Đã xóa " + item.template.name + " khỏi DS lọc đồ", 0);
 				break;
 			}
@@ -3094,6 +3716,7 @@ public class ModFunc : IActionListener
 		if (GameCanvas.isPointerClick && GameCanvas.isPointerJustRelease && GameCanvas.isPointerHoldIn(num20, num21, num18, num19))
 		{
 			isAutoFilterItem = !isAutoFilterItem;
+			MarkSettingsDirty();
 			GameScr.info1.addInfo(isAutoFilterItem ? "Đã bật auto lọc đồ" : "Đã tắt auto lọc đồ", 0);
 			GameCanvas.clearAllPointerEvent();
 		}
@@ -3157,6 +3780,7 @@ public class ModFunc : IActionListener
 				if (GameCanvas.isPointerHoldIn(num33, num34, num32, h2))
 				{
 					listFilterItems.RemoveAt(l);
+					MarkSettingsDirty();
 					GameScr.info1.addInfo("Đã xóa vật phẩm khỏi danh sách lọc", 0);
 					GameCanvas.clearAllPointerEvent();
 				}

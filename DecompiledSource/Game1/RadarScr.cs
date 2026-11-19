@@ -1,5 +1,4 @@
 using System;
-using UnityEngine;
 
 namespace Game1;
 
@@ -325,7 +324,7 @@ public class RadarScr : mScreen
 		}
 		catch (Exception ex)
 		{
-			Debug.LogError("-upd-radaScr-null: " + ex.ToString());
+			Cout.LogErrorThrottled("radar.upd", "-upd-radaScr-null: " + ex.ToString());
 		}
 	}
 
@@ -712,7 +711,7 @@ public class RadarScr : mScreen
 		}
 		catch (Exception ex)
 		{
-			Debug.LogError("-pnt-radaScr-null: " + ex.ToString());
+			Cout.LogErrorThrottled("radar.pnt", "-pnt-radaScr-null: " + ex.ToString());
 		}
 	}
 

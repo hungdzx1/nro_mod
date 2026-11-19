@@ -134,6 +134,8 @@ public class Effect
 
 	public long cur_time_cLastStatusMe;
 
+	private EffectData cachedEffData;
+
 	public Effect(int id, Char c, int layer, int loop, int loopCount, sbyte isStand)
 	{
 		this.c = c;
@@ -265,6 +267,15 @@ public class Effect
 		}
 	}
 
+	private EffectData GetEffData()
+	{
+		if (cachedEffData == null || cachedEffData.ID != effId)
+		{
+			cachedEffData = getEffDataById(effId);
+		}
+		return cachedEffData;
+	}
+
 	public static EffectData getEffDataById(int id)
 	{
 		for (int i = 0; i < vEffData.size(); i++)
@@ -301,9 +312,9 @@ public class Effect
 
 	public void paintUnderBackground(mGraphics g, int xLayer, int yLayer)
 	{
-		if (isPaintz() && getEffDataById(effId).img != null)
+		if (isPaintz() && GetEffData().img != null)
 		{
-			getEffDataById(effId).paintFrame(g, currFrame, x + xLayer, y + yLayer, trans, layer);
+			GetEffData().paintFrame(g, currFrame, x + xLayer, y + yLayer, trans, layer);
 		}
 	}
 
@@ -338,11 +349,11 @@ public class Effect
 
 	public void paint(mGraphics g)
 	{
-		if (!ModFunc.GiamDungLuong && isPaint && getEffDataById(effId) != null && getEffDataById(effId).img != null)
+		if (!ModFunc.GiamDungLuong && isPaint && GetEffData() != null && GetEffData().img != null)
 		{
 			try
 			{
-				getEffDataById(effId).paintFrame(g, currFrame, x, y, trans, layer);
+				GetEffData().paintFrame(g, currFrame, x, y, trans, layer);
 			}
 			catch (Exception)
 			{
@@ -360,17 +371,17 @@ public class Effect
 			}
 			else
 			{
-				if (getEffDataById(effId) == null || getEffDataById(effId).img == null)
+				if (GetEffData() == null || GetEffData().img == null)
 				{
 					return;
 				}
 				if (typeEff == 5)
 				{
-					data = getEffDataById(effId).get(c.statusMe);
+					data = GetEffData().get(c.statusMe);
 				}
 				else
 				{
-					data = getEffDataById(effId).get();
+					data = GetEffData().get();
 				}
 				if (data != null)
 				{

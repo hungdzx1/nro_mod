@@ -153,7 +153,7 @@ public class Session_ME : ISession
 			int num3 = ((readKey(dis.ReadSByte()) + 128) * 256 + num2) * 256 + num;
 			if (cmd == -28)
 			{
-				Debug.Log("data - length" + num3);
+				Cout.Log("data - length" + num3);
 			}
 			sbyte[] array = new sbyte[num3];
 			Buffer.BlockCopy(dis.ReadBytes(num3), 0, array, 0, num3);

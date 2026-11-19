@@ -1,5 +1,6 @@
 using System.Net.NetworkInformation;
 using System.Threading;
+using Game1.Mod;
 using UnityEngine;
 
 namespace Game1;
@@ -183,7 +184,7 @@ public class Main : MonoBehaviour
 		Session_ME2.update();
 		if (Management.tab == TabType.Tab1 && Event.current.type.Equals(EventType.Repaint) && paintCount <= updateCount)
 		{
-			if (GameMidlet.gameCanvas != null)
+			if (GameMidlet.gameCanvas != null && !ModExtras.SkipPaint())
 			{
 				GameMidlet.gameCanvas.paint(g);
 			}
@@ -301,6 +302,7 @@ public class Main : MonoBehaviour
 	{
 		Rms.update();
 		NroInstanceProfile.UpdateWindowTitle();
+		InputRecorder.Tick();
 		count++;
 		if (count >= 10)
 		{
@@ -342,17 +344,24 @@ public class Main : MonoBehaviour
 		{
 			return;
 		}
+		ModExtras.WakeFromInput();
 		if (Input.GetMouseButtonDown(0))
 		{
 			Vector3 mousePosition = Input.mousePosition;
-			GameMidlet.gameCanvas.pointerPressed((int)(mousePosition.x / (float)mGraphics.zoomLevel), (int)(((float)Screen.height - mousePosition.y) / (float)mGraphics.zoomLevel) + mGraphics.addYWhenOpenKeyBoard);
+			int x = (int)(mousePosition.x / (float)mGraphics.zoomLevel);
+			int y = (int)(((float)Screen.height - mousePosition.y) / (float)mGraphics.zoomLevel) + mGraphics.addYWhenOpenKeyBoard;
+			GameMidlet.gameCanvas.pointerPressed(x, y);
+			InputRecorder.OnPointerPressed(x, y);
 			lastMousePos.x = mousePosition.x / (float)mGraphics.zoomLevel;
 			lastMousePos.y = mousePosition.y / (float)mGraphics.zoomLevel + (float)mGraphics.addYWhenOpenKeyBoard;
 		}
 		if (Input.GetMouseButton(0))
 		{
 			Vector3 mousePosition2 = Input.mousePosition;
-			GameMidlet.gameCanvas.pointerDragged((int)(mousePosition2.x / (float)mGraphics.zoomLevel), (int)(((float)Screen.height - mousePosition2.y) / (float)mGraphics.zoomLevel) + mGraphics.addYWhenOpenKeyBoard);
+			int x2 = (int)(mousePosition2.x / (float)mGraphics.zoomLevel);
+			int y2 = (int)(((float)Screen.height - mousePosition2.y) / (float)mGraphics.zoomLevel) + mGraphics.addYWhenOpenKeyBoard;
+			GameMidlet.gameCanvas.pointerDragged(x2, y2);
+			InputRecorder.OnPointerDragged(x2, y2);
 			lastMousePos.x = mousePosition2.x / (float)mGraphics.zoomLevel;
 			lastMousePos.y = mousePosition2.y / (float)mGraphics.zoomLevel + (float)mGraphics.addYWhenOpenKeyBoard;
 		}
@@ -361,7 +370,10 @@ public class Main : MonoBehaviour
 			Vector3 mousePosition3 = Input.mousePosition;
 			lastMousePos.x = mousePosition3.x / (float)mGraphics.zoomLevel;
 			lastMousePos.y = mousePosition3.y / (float)mGraphics.zoomLevel + (float)mGraphics.addYWhenOpenKeyBoard;
-			GameMidlet.gameCanvas.pointerReleased((int)(mousePosition3.x / (float)mGraphics.zoomLevel), (int)(((float)Screen.height - mousePosition3.y) / (float)mGraphics.zoomLevel) + mGraphics.addYWhenOpenKeyBoard);
+			int x3 = (int)(mousePosition3.x / (float)mGraphics.zoomLevel);
+			int y3 = (int)(((float)Screen.height - mousePosition3.y) / (float)mGraphics.zoomLevel) + mGraphics.addYWhenOpenKeyBoard;
+			GameMidlet.gameCanvas.pointerReleased(x3, y3);
+			InputRecorder.OnPointerReleased(x3, y3);
 		}
 		if (Input.anyKeyDown && Event.current.type == EventType.KeyDown)
 		{
@@ -381,6 +393,7 @@ public class Main : MonoBehaviour
 			if (num != 0)
 			{
 				GameMidlet.gameCanvas.keyPressedz(num);
+				InputRecorder.OnKeyPressed(num);
 			}
 		}
 		if (Event.current.type == EventType.KeyUp)
@@ -389,21 +402,23 @@ public class Main : MonoBehaviour
 			if (num2 != 0)
 			{
 				GameMidlet.gameCanvas.keyReleasedz(num2);
+				InputRecorder.OnKeyReleased(num2);
 			}
 		}
 		if (isPC)
 		{
 			GameMidlet.gameCanvas.scrollMouse((int)(Input.GetAxis("Mouse ScrollWheel") * 10f));
 			int num3 = (int)Input.mousePosition.x;
-			float y = Input.mousePosition.y;
-			int x = num3 / mGraphics.zoomLevel;
-			int y2 = (Screen.height - (int)y) / mGraphics.zoomLevel;
-			GameMidlet.gameCanvas.pointerMouse(x, y2);
+			float y4 = Input.mousePosition.y;
+			int x4 = num3 / mGraphics.zoomLevel;
+			int y5 = (Screen.height - (int)y4) / mGraphics.zoomLevel;
+			GameMidlet.gameCanvas.pointerMouse(x4, y5);
 		}
 	}
 
 	private void OnApplicationQuit()
 	{
+		ModFunc.SaveSettingsNow();
 		GameCanvas.bRun = false;
 		Session_ME.gI().close();
 		Session_ME2.gI().close();
@@ -418,6 +433,7 @@ public class Main : MonoBehaviour
 		isResume = false;
 		if (paused)
 		{
+			ModFunc.SaveSettingsNow();
 			if (GameCanvas.isWaiting())
 			{
 				isQuitApp = true;

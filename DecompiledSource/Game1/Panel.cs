@@ -4444,8 +4444,7 @@ public class Panel : IActionListener, IChatable
 		yMap = getYMap() + yScroll;
 		xMapTask = getXMapTask() + xScroll;
 		yMapTask = getYMapTask() + yScroll;
-		Resources.UnloadUnusedAssets();
-		GC.Collect();
+		mSystem.gcc();
 	}
 
 	private void setTabTask()
@@ -6907,7 +6906,7 @@ public class Panel : IActionListener, IChatable
 		}
 		catch (Exception message)
 		{
-			Debug.LogError(message);
+			Cout.LogErrorThrottled("Panel.paintList", message.ToString());
 		}
 		paintScrollArrow(g);
 	}
@@ -11803,11 +11802,16 @@ public class Panel : IActionListener, IChatable
 				}
 				else
 				{
-					ModFunc.isAutoLogin = true;
+					string text = ((GameCanvas.loginScr != null && GameCanvas.loginScr.tfUser != null) ? GameCanvas.loginScr.tfUser.getText() : string.Empty);
+					if (string.IsNullOrEmpty(text))
+					{
+						text = Rms.loadRMSString("acc") ?? string.Empty;
+					}
 					ModFunc.autoLogin = new AutoLogin
 					{
-						accAutoLogin = GameCanvas.loginScr.tfUser.getText()
+						accAutoLogin = text
 					};
+					ModFunc.isAutoLogin = true;
 				}
 				GameScr.info1.addInfo("Đã " + (ModFunc.isAutoLogin ? "bật" : "tắt") + " tự động đăng nhập", 0);
 				break;
@@ -11831,6 +11835,12 @@ public class Panel : IActionListener, IChatable
 			case 3:
 				ModFunc.changeStatusEffectInven();
 				GameScr.info1.addInfo("Đã " + (ModFunc.isEffectInven ? "bật" : "tắt") + " hiệu ứng túi đồ", 0);
+				break;
+			case 4:
+				ModExtras.ToggleHideAura();
+				break;
+			case 5:
+				ModExtras.ToggleHideBag();
 				break;
 			}
 			break;
@@ -11871,6 +11881,7 @@ public class Panel : IActionListener, IChatable
 			}
 			break;
 		}
+		ModFunc.MarkSettingsDirty();
 		SoundMn.gI().GetStrModFunc();
 	}
 

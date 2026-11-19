@@ -22,12 +22,27 @@ public class EffectData
 
 	public int height;
 
+	private ImageInfo[] infoById;
+
+	private ImageInfo[] infoSource;
+
 	public ImageInfo getImageInfo(sbyte id)
 	{
+		if (infoById == null || infoSource != imgInfo)
+		{
+			infoById = new ImageInfo[256];
+			infoSource = imgInfo;
+		}
+		ImageInfo imageInfo = infoById[id + 128];
+		if (imageInfo != null)
+		{
+			return imageInfo;
+		}
 		for (int i = 0; i < imgInfo.Length; i++)
 		{
 			if (imgInfo[i].ID == id)
 			{
+				infoById[id + 128] = imgInfo[i];
 				return imgInfo[i];
 			}
 		}

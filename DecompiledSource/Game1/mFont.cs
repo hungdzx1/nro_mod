@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Game1;
@@ -162,6 +163,12 @@ public class mFont
 	private int yAdd;
 
 	private string pathImage;
+
+	private readonly GUIStyle[] styleCache = new GUIStyle[4];
+
+	private readonly Dictionary<string, int> widthCache = new Dictionary<string, int>();
+
+	private static Color[] borderPalette;
 
 	public mFont(string strFont, string pathImage, string pathData, int space)
 	{
@@ -378,15 +385,19 @@ public class mFont
 		x--;
 		if (id > 24)
 		{
-			Color[] array = new Color[6]
+			if (borderPalette == null)
 			{
-				setColor(6029312),
-				setColor(7169025),
-				setColor(7680),
-				setColor(0),
-				setColor(9264),
-				setColor(6029312)
-			};
+				borderPalette = new Color[6]
+				{
+					setColor(6029312),
+					setColor(7169025),
+					setColor(7680),
+					setColor(0),
+					setColor(9264),
+					setColor(6029312)
+				};
+			}
+			Color[] array = borderPalette;
 			color1 = array[id - 25];
 			color2 = array[id - 25];
 			_drawString(g, st, x + 1, y, align);
@@ -425,7 +436,7 @@ public class mFont
 			};
 			for (int i = 0; i < length; i++)
 			{
-				int num2 = strFont.IndexOf(st[i] + string.Empty);
+				int num2 = strFont.IndexOf(st[i]);
 				if (num2 == -1)
 				{
 					num2 = 0;
@@ -605,10 +616,20 @@ public class mFont
 	{
 		try
 		{
-			return (int)new GUIStyle
+			if (widthCache.TryGetValue(s, out var value))
+			{
+				return value;
+			}
+			if (widthCache.Count > 3000)
+			{
+				widthCache.Clear();
+			}
+			value = (int)new GUIStyle
 			{
 				font = myFont
 			}.CalcSize(new GUIContent(s)).x / mGraphics.zoomLevel;
+			widthCache[s] = value;
+			return value;
 		}
 		catch (Exception ex)
 		{
@@ -649,31 +670,40 @@ public class mFont
 	public void _drawString(mGraphics g, string st, int x0, int y0, int align)
 	{
 		y0 += yAddFont;
-		GUIStyle gUIStyle = new GUIStyle(GUI.skin.label);
-		gUIStyle.font = myFont;
-		float num = 0f;
+		int num = ((align >= 0 && align <= 3) ? align : 0);
+		GUIStyle gUIStyle = styleCache[num];
+		if (gUIStyle == null || gUIStyle.font != myFont)
+		{
+			gUIStyle = new GUIStyle(GUI.skin.label);
+			gUIStyle.font = myFont;
+			gUIStyle.alignment = num switch
+			{
+				1 => TextAnchor.UpperRight, 
+				0 => TextAnchor.UpperLeft, 
+				_ => TextAnchor.UpperCenter, 
+			};
+			styleCache[num] = gUIStyle;
+		}
 		float num2 = 0f;
+		float num3 = 0f;
 		switch (align)
 		{
 		case 0:
-			num = x0;
-			num2 = y0;
-			gUIStyle.alignment = TextAnchor.UpperLeft;
+			num2 = x0;
+			num3 = y0;
 			break;
 		case 1:
-			num = x0 - GameCanvas.w;
-			num2 = y0;
-			gUIStyle.alignment = TextAnchor.UpperRight;
+			num2 = x0 - GameCanvas.w;
+			num3 = y0;
 			break;
 		case 2:
 		case 3:
-			num = x0 - GameCanvas.w / 2;
-			num2 = y0;
-			gUIStyle.alignment = TextAnchor.UpperCenter;
+			num2 = x0 - GameCanvas.w / 2;
+			num3 = y0;
 			break;
 		}
 		gUIStyle.normal.textColor = color1;
-		g.drawString(st, (int)num, (int)num2, gUIStyle);
+		g.drawString(st, (int)num2, (int)num3, gUIStyle);
 	}
 
 	public void reloadImage()

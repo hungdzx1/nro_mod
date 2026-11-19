@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Game2.Mod;
 
 namespace Game2;
 
@@ -290,14 +291,16 @@ public class SoundMn
 				(ModFunc.GI().autoWakeUp, ModFunc.strAutoWakeUp),
 				(ModFunc.isAutoLogin, ModFunc.strAutoLogin)
 			},
-			new(bool, string)[6]
+			new(bool, string)[8]
 			{
 				(!ModFunc.ModNotLogo && ModFunc.isLogo, ModFunc.strLogo),
 				(!ModFunc.ModNotLogo && ModFunc.isLogoGif, ModFunc.strLogoGif),
 				(ModFunc.AnPlayer, ModFunc.strAnPlayer),
 				(ModFunc.isShowID, ModFunc.strShowID),
 				(ModFunc.isInventory, ModFunc.strInventoryOFF),
-				(ModFunc.isEffectInven, ModFunc.strEffectOff)
+				(ModFunc.isEffectInven, ModFunc.strEffectOff),
+				(ModExtras.HideOthersAura, "Ẩn aura người khác"),
+				(ModExtras.HideOthersBag, "Ẩn đeo lưng người khác")
 			},
 			new(bool, string)[5]
 			{

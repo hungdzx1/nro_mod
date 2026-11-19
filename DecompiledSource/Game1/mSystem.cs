@@ -19,6 +19,10 @@ public class mSystem
 
 	public static sbyte maxINAPP = 5;
 
+	private static readonly long EpochTicks = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).Ticks;
+
+	private static long lastGcTime;
+
 	public static void AddIpTest()
 	{
 	}
@@ -225,19 +229,26 @@ public class mSystem
 
 	public static long currentTimeMillis()
 	{
-		DateTime dateTime = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-		return (DateTime.UtcNow.Ticks - dateTime.Ticks) / 10000;
+		return (DateTime.UtcNow.Ticks - EpochTicks) / 10000;
 	}
 
 	public static void println(object str)
 	{
-		Debug.Log(str);
+		if (isTest)
+		{
+			Debug.Log(str);
+		}
 	}
 
 	public static void gcc()
 	{
-		Resources.UnloadUnusedAssets();
-		GC.Collect();
+		long num = currentTimeMillis();
+		if (num - lastGcTime >= 30000)
+		{
+			lastGcTime = num;
+			Resources.UnloadUnusedAssets();
+			GC.Collect();
+		}
 	}
 
 	public static void onConnectOK()
@@ -319,22 +330,22 @@ public class mSystem
 
 	public static FrameImage getFraImage(string nameImg)
 	{
-		FrameImage result = null;
-		MainImage mainImage = null;
-		if (mainImage == null)
+		MainImage imagePath = ImgByName.getImagePath(nameImg, ImgByName.hashImagePath);
+		if (imagePath.img == null)
 		{
-			mainImage = ImgByName.getImagePath(nameImg, ImgByName.hashImagePath);
+			return null;
 		}
-		if (mainImage.img != null)
+		FrameImage cachedFrame = imagePath.cachedFrame;
+		if (cachedFrame != null && cachedFrame.imgFrame == imagePath.img)
 		{
-			int num = mainImage.img.getHeight() / mainImage.nFrame;
-			if (num < 1)
-			{
-				num = 1;
-			}
-			result = new FrameImage(mainImage.img, mainImage.img.getWidth(), num);
+			return cachedFrame;
 		}
-		return result;
+		int num = imagePath.img.getHeight() / imagePath.nFrame;
+		if (num < 1)
+		{
+			num = 1;
+		}
+		return imagePath.cachedFrame = new FrameImage(imagePath.img, imagePath.img.getWidth(), num);
 	}
 
 	public static Image loadImage(string path)

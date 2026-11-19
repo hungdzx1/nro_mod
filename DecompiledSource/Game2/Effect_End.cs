@@ -1,5 +1,4 @@
 using System;
-using UnityEngine;
 
 namespace Game2;
 
@@ -1460,9 +1459,7 @@ public class Effect_End
 		fra_skill = new FrameImage[array.Length];
 		for (int i = 0; i < array.Length; i++)
 		{
-			string text = "Skills_" + num + "_" + typePaint + "_" + array[i];
-			Debug.Log("NAME: " + text);
-			FrameImage frameImage = mSystem.getFraImage(text);
+			FrameImage frameImage = mSystem.getFraImage("Skills_" + num + "_" + typePaint + "_" + array[i]);
 			if (frameImage == null)
 			{
 				frameImage = new FrameImage(array2[i]);

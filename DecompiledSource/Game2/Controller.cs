@@ -4808,8 +4808,7 @@ public class Controller : IMessageHandler
 					_ = waypoint.minX;
 				}
 			}
-			Resources.UnloadUnusedAssets();
-			GC.Collect();
+			mSystem.gcc();
 			num = msg.reader().readByte();
 			Mob.newMob.removeAllElements();
 			for (sbyte b = 0; b < num; b++)
@@ -5083,8 +5082,7 @@ public class Controller : IMessageHandler
 			sbyte teleport = msg.reader().readByte();
 			loadCurrMap(teleport);
 			Char.isLoadingMap = false;
-			Resources.UnloadUnusedAssets();
-			GC.Collect();
+			mSystem.gcc();
 			ModFunc.GI().canUpdate = true;
 		}
 		catch (Exception)
@@ -5258,10 +5256,9 @@ public class Controller : IMessageHandler
 						loadItemNew(dataInputStream3.r, 0, isSave: false);
 						DataInputStream dataInputStream4 = new DataInputStream(Rms.loadRMS("NRitem1"));
 						loadItemNew(dataInputStream4.r, 1, isSave: false);
-						DataInputStream dataInputStream5 = new DataInputStream(Rms.loadRMS("NRitem2"));
-						loadItemNew(dataInputStream5.r, 2, isSave: false);
-						DataInputStream dataInputStream6 = new DataInputStream(Rms.loadRMS("NRitem100"));
-						loadItemNew(dataInputStream6.r, 100, isSave: false);
+						loadItemType2FromCache(strict: true);
+						DataInputStream dataInputStream5 = new DataInputStream(Rms.loadRMS("NRitem100"));
+						loadItemNew(dataInputStream5.r, 100, isSave: false);
 						LoginScr.isUpdateItem = false;
 						if (GameScr.gI().iOptionTemplates == null || GameScr.gI().iOptionTemplates.Length == 0)
 						{
@@ -6180,6 +6177,43 @@ public class Controller : IMessageHandler
 		}
 	}
 
+	public void loadItemType2FromCache(bool strict)
+	{
+		int num = Rms.loadRMSInt("NRitem2n");
+		if (num < 0)
+		{
+			if (strict)
+			{
+				throw new Exception("item cache old format, re-download");
+			}
+			sbyte[] array = Rms.loadRMS("NRitem2");
+			if (array != null)
+			{
+				loadItemNew(new DataInputStream(array).r, 2, isSave: false);
+			}
+			return;
+		}
+		if (num == 0 && strict)
+		{
+			throw new Exception("item cache has no type-2 chunk");
+		}
+		for (int i = 0; i < num; i++)
+		{
+			sbyte[] array2 = Rms.loadRMS("NRitem2_" + i);
+			if (array2 == null)
+			{
+				if (strict)
+				{
+					throw new Exception("item cache chunk " + i + " missing");
+				}
+			}
+			else
+			{
+				loadItemNew(new DataInputStream(array2).r, 2, isSave: false);
+			}
+		}
+	}
+
 	public void loadItemNew(myReader d, sbyte type, bool isSave)
 	{
 		try
@@ -6222,6 +6256,7 @@ public class Controller : IMessageHandler
 					sbyte[] data2 = new sbyte[d.available()];
 					d.readFully(ref data2);
 					Rms.saveRMS("NRitem1", data2);
+					Rms.saveRMSInt("NRitem2n", 0);
 				}
 				break;
 			}
@@ -6238,7 +6273,13 @@ public class Controller : IMessageHandler
 					d.reset();
 					sbyte[] data3 = new sbyte[d.available()];
 					d.readFully(ref data3);
-					Rms.saveRMS("NRitem2", data3);
+					int chunkIdx = Rms.loadRMSInt("NRitem2n");
+					if (chunkIdx < 0)
+					{
+						chunkIdx = 0;
+					}
+					Rms.saveRMS("NRitem2_" + chunkIdx, data3);
+					Rms.saveRMSInt("NRitem2n", chunkIdx + 1);
 					sbyte[] data4 = new sbyte[1] { GameScr.vcItem };
 					Rms.saveRMS("NRitemVersion", data4);
 					LoginScr.isUpdateItem = false;

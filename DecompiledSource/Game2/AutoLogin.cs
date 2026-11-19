@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace Game2;
@@ -7,6 +8,12 @@ public class AutoLogin
 	public bool waitToNextLogin;
 
 	public long lastTimeWait;
+
+	public long lastTimeLogin;
+
+	public int attempts;
+
+	public bool warnedNoAccount;
 
 	public bool hasSetUserPass;
 
@@ -21,7 +28,7 @@ public class AutoLogin
 	{
 		foreach (Account account in accounts)
 		{
-			if (account.getUsername().Equals(accAutoLogin))
+			if (string.Equals((account.getUsername() ?? string.Empty).Trim(), (accAutoLogin ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase))
 			{
 				return account;
 			}

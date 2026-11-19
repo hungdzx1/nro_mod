@@ -1,5 +1,5 @@
 using System;
-using System.Collections;
+using System.Collections.Generic;
 using Game2.Assets.src.e;
 using UnityEngine;
 
@@ -71,7 +71,7 @@ public class mGraphics
 
 	public const int TRANS_ROT90 = 5;
 
-	public static Hashtable cachedTextures = new Hashtable();
+	public static Dictionary<long, Texture> cachedTextures = new Dictionary<long, Texture>();
 
 	public static int addYWhenOpenKeyBoard;
 
@@ -107,15 +107,36 @@ public class mGraphics
 
 	private float flipSpeed = 5f;
 
-	private void cache(string key, Texture value)
+	private static long TexKey(int kind, float r, float g, float b, float a)
+	{
+		return ((long)kind << 32) | ((long)(int)(r * 255f + 0.5f) << 24) | ((long)(int)(g * 255f + 0.5f) << 16) | ((long)(int)(b * 255f + 0.5f) << 8) | (int)(a * 255f + 0.5f);
+	}
+
+	private static Texture2D GetTex(long key)
+	{
+		if (!cachedTextures.TryGetValue(key, out var value))
+		{
+			return null;
+		}
+		return value as Texture2D;
+	}
+
+	private void cache(long key, Texture value)
 	{
 		if (cachedTextures.Count > 400)
 		{
+			foreach (KeyValuePair<long, Texture> cachedTexture in cachedTextures)
+			{
+				if (cachedTexture.Value != null)
+				{
+					UnityEngine.Object.Destroy(cachedTexture.Value);
+				}
+			}
 			cachedTextures.Clear();
 		}
 		if (value.width * value.height < GameCanvas.w * GameCanvas.h)
 		{
-			cachedTextures.Add(key, value);
+			cachedTextures[key] = value;
 		}
 	}
 
@@ -185,8 +206,8 @@ public class mGraphics
 			x2 += translateX;
 			y2 += translateY;
 		}
-		string key = "dl" + r + g + b;
-		Texture2D texture2D = (Texture2D)cachedTextures[key];
+		long key = TexKey(1, r, g, b, 1f);
+		Texture2D texture2D = GetTex(key);
 		if (texture2D == null)
 		{
 			texture2D = new Texture2D(1, 1);
@@ -285,8 +306,8 @@ public class mGraphics
 			x2 += translateX;
 			y2 += translateY;
 		}
-		string key = "dl" + r + g + b;
-		Texture2D texture2D = (Texture2D)cachedTextures[key];
+		long key = TexKey(1, r, g, b, 1f);
+		Texture2D texture2D = GetTex(key);
 		if (texture2D == null)
 		{
 			texture2D = new Texture2D(1, 1);
@@ -354,8 +375,8 @@ public class mGraphics
 			num2 += (float)translateY;
 		}
 		int num3 = 1;
-		string key = "fr" + num3 + num3 + r + g + b + a;
-		Texture2D texture2D = (Texture2D)cachedTextures[key];
+		long key = TexKey(2, r, g, b, a);
+		Texture2D texture2D = GetTex(key);
 		if (texture2D == null)
 		{
 			texture2D = new Texture2D(num3, num3);
@@ -404,8 +425,8 @@ public class mGraphics
 		}
 		int width = 1;
 		int height = 1;
-		string key = "fr" + width + height + r + g + b + a;
-		Texture2D texture2D = (Texture2D)cachedTextures[key];
+		long key = TexKey(2, r, g, b, a);
+		Texture2D texture2D = GetTex(key);
 		if (texture2D == null)
 		{
 			texture2D = new Texture2D(width, height);
@@ -639,6 +660,10 @@ public class mGraphics
 			num3 = rect.x - r.x;
 			num4 = rect.y - r.y;
 		}
+		if (transform < 4 && (x + num + 100f < 0f || y + num2 + 100f < 0f || x - 100f > (float)Screen.width || y - 100f > (float)Screen.height))
+		{
+			return;
+		}
 		float num14 = 0f;
 		float num15 = 0f;
 		switch (transform)
@@ -786,6 +811,10 @@ public class mGraphics
 			num2 = rect.height;
 			num3 = rect.x - r.x;
 			num4 = rect.y - r.y;
+		}
+		if (transform < 4 && ((float)x + num + 100f < 0f || (float)y + num2 + 100f < 0f || (float)x - 100f > (float)Screen.width || (float)y - 100f > (float)Screen.height))
+		{
+			return;
 		}
 		float num14 = 0f;
 		float num15 = 0f;

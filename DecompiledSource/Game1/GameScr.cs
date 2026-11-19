@@ -848,15 +848,11 @@ public class GameScr : mScreen, IChatable
 			{
 				Controller.gI().loadItemNew(new DataInputStream(array2).r, 1, isSave: false);
 			}
-			sbyte[] array3 = Rms.loadRMS("NRitem2");
+			Controller.gI().loadItemType2FromCache(strict: false);
+			sbyte[] array3 = Rms.loadRMS("NRitem100");
 			if (array3 != null)
 			{
-				Controller.gI().loadItemNew(new DataInputStream(array3).r, 2, isSave: false);
-			}
-			sbyte[] array4 = Rms.loadRMS("NRitem100");
-			if (array4 != null)
-			{
-				Controller.gI().loadItemNew(new DataInputStream(array4).r, 100, isSave: false);
+				Controller.gI().loadItemNew(new DataInputStream(array3).r, 100, isSave: false);
 			}
 		}
 		catch (Exception ex)
@@ -1041,6 +1037,8 @@ public class GameScr : mScreen, IChatable
 		if (ModFunc.autoLogin != null)
 		{
 			ModFunc.autoLogin.waitToNextLogin = false;
+			ModFunc.autoLogin.attempts = 0;
+			ModFunc.autoLogin.warnedNoAccount = false;
 		}
 		vChatVip.removeAllElements();
 		ServerListScreen.isWait = false;
@@ -3173,6 +3171,11 @@ public class GameScr : mScreen, IChatable
 		}
 	}
 
+	public bool IsWorldObjectAt(int px, int py)
+	{
+		return findClickToItem(px + cmx, py + cmy) != null;
+	}
+
 	private IMapObject findClickToItem(int px, int py)
 	{
 		IMapObject mapObject = null;
@@ -4882,7 +4885,7 @@ public class GameScr : mScreen, IChatable
 			catch (Exception)
 			{
 			}
-			if (char5 != null && char5.chatInfo != null)
+			if (char5 != null && char5.chatInfo != null && !char5.lodSkip)
 			{
 				char5.chatInfo.paint(g, char5.cx, char5.cy - char5.ch, char5.cdir);
 			}
@@ -6302,6 +6305,24 @@ public class GameScr : mScreen, IChatable
 			ChatTextField.gI().strChat = "Chat";
 			ChatTextField.gI().tfChat.name = "chat";
 			ChatTextField.gI().tfChat.setIputType(TField.INPUT_TYPE_ANY);
+			ChatTextField.gI().isShow = false;
+		}
+		else if (ChatTextField.gI().strChat == "Tên bản ghi" && text != string.Empty)
+		{
+			InputRecorder.SetName(text);
+			ChatTextField.gI().strChat = "Chat";
+			ChatTextField.gI().tfChat.name = "chat";
+			ChatTextField.gI().tfChat.setIputType(TField.INPUT_TYPE_ANY);
+			ChatTextField.gI().tfChat.setMaxTextLenght(80);
+			ChatTextField.gI().isShow = false;
+		}
+		else if (ChatTextField.gI().strChat == "Cài phím tắt" && text != string.Empty)
+		{
+			ModFunc.GI().SetHotkey(text);
+			ChatTextField.gI().strChat = "Chat";
+			ChatTextField.gI().tfChat.name = "chat";
+			ChatTextField.gI().tfChat.setIputType(TField.INPUT_TYPE_ANY);
+			ChatTextField.gI().tfChat.setMaxTextLenght(80);
 			ChatTextField.gI().isShow = false;
 		}
 		else if (ChatTextField.gI().strChat == "Cài ID phím tắt" && text != string.Empty)
